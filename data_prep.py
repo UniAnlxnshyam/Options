@@ -13,6 +13,7 @@ import seaborn as sns
 import warnings
 
 def compute_risk_free_rate(x):
+    
     exp_period = [4,8,13,17,26,52]
     weeks_to_expiry = round(x['days_to_expiry']/7)
     if f'risk_free_rate_{weeks_to_expiry}' in x.index.to_list() and pd.notna(x[f'risk_free_rate_{weeks_to_expiry}']):
@@ -53,6 +54,7 @@ def compute_iv(x):
     except Exception as e:
         # check exception 
         implied_vol = 0
+    implied_vol = min(20,implied_vol)
     return implied_vol
     
 
@@ -166,8 +168,7 @@ def load_data(path = './Data/master_data.csv'):
    
     return df
 
-def extract_clean_data(df,flag = 'c',trade_date = 20190131,test =False):
-    data = df[(df.TradeDate==trade_date)&(df.CallPut==flag)].copy()
+def extract_clean_data(data,flag = 'c',trade_date = 20190131,test =False):
     data['px'] = (data.AskPrice+data.BidPrice)/2
     data['risk_free_rate'] = data.apply(lambda x:compute_risk_free_rate(x),axis=1)
     data['ImpliedVolatility'] = data.apply(lambda x:compute_iv(x),axis=1)

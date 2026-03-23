@@ -16,7 +16,7 @@ class DataExtractor():
         '''
         date: trade date
         months : expected months to exp
-        s : sorted expiry dates of of the available options on the above trade date
+        s1 : sorted expiry dates of of the available options on the above trade date
         '''
         if months <6:
             days = 30
@@ -39,7 +39,8 @@ class DataExtractor():
 
         return days_to_expiry, str(expiry.date())
     def get_premium(self,flag,stk,date,exp_date,):
-        data = extract_clean_data(self.df,flag = flag,trade_date=date)
+        data = self.df[(self.df.TradeDate==date)&(self.df.CallPut==flag)].copy()
+        data = extract_clean_data(data,trade_date=date,flag = flag)
         surface_genrator = GenSurface(data,interpolator=self.interpolator)
         surface_genrator.update_surface()
         # print(date)
@@ -126,7 +127,8 @@ class DataExtractor():
                         fl = False
                     
                     if not fl and df_trade.empty :
-                        data = extract_clean_data(self.df,flag = callput,trade_date=dates[i])
+                        data = self.df[(self.df.TradeDate==dates[i])&(self.df.CallPut==callput)].copy()
+                        data = extract_clean_data(data,trade_date=dates[i],flag = callput)
                         surface_genrator = GenSurface(data,interpolator=self.interpolator)
                         surface_genrator.update_surface()
                         # print(date)
@@ -233,7 +235,7 @@ class DataExtractor():
                     rho=0
                     flag =0
                     f2 =1
-                    print(2,dates[idx+j])
+                    # print(2,dates[idx+j])
                 df_opt = data.copy()
                 df_opt['AskPrice'] = px
                 df_opt['BidPrice'] = px
