@@ -39,8 +39,8 @@ def compute_pnl(data,mt,bot_on,spot):
     
     data_st = data[data.index==data.index[0]]
     data_end = data[data.index==data.index[1]]
-    px_start = (data_st.AskPrice.values[0]+data_st.BidPrice.values[0])/2
-    px_end = (data_end.AskPrice.values[0]+data_end.BidPrice.values[0])/2
+    px_start = data_st.px.values[0]
+    px_end = data_end.px.values[0]
                  
     if data_end.TradeDate.values[0]<= data_st.ExpiryDate.values[0]: 
 
@@ -68,24 +68,24 @@ def compute_pnl(data,mt,bot_on,spot):
     return data_st
 
 
-def gen_options_pnl(df,moneyness = 100, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',capital = 10000000,
+def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',moneyness = 100, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',capital = 10000000,
                     interpolator ='bicubic',symbool='EV',start_date = None,end_date= None):
-    
+    df = pd.read_csv(os.path.join(os.getcwd(),'Data',data_path))
     if buysell=='buy':
         mt =1
     else:
         mt=-1
     
-    data_gen = DataExtractor(df,interpolator=interpolator,test=True)
-    df_opt = data_gen.gen_data(moneyness = moneyness, time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
-                               symbool=symbool,start_date =start_date,end_date= end_date)
+    data_gen = DataExtractor(interpolator=interpolator,data_path = data_path,rates_path = rates_path)
+    df_opt,_ = data_gen.gen_data(moneyness = moneyness, time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
+                                 symbool=symbool,start_date =start_date,end_date= end_date)
     # df_opt['NextSpot'] = df_opt.Spot.shift(-1)
     # df_opt['NextSpot'] = df_opt['NextSpot'].ffill()
     # df_opt = df_opt.iloc[:-1]
     df_opt = df_opt[['Flag','TradeDate', 'ExpiryDate', 'CallPut', 'AdjStrike',
                      'AdjSpot','Month_To_Expiry', 'days_to_expiry', 'ExpirySpot',
-                     'AdjExpiry', 'Moneyness', 'AbsMoneyness', 'Symbol',
-                     'BidPrice', 'AskPrice', 'Delta', ]]
+                     'AdjExpiry', 'Moneyness','Symbol',
+                     'px', 'Delta', ]]
     if not end_date:
         last_date = np.sort(df[df.Symbol == symbool].TradeDate.unique())[-1]
     else:

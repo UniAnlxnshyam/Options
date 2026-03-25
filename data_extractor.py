@@ -5,9 +5,11 @@ import os
 from pandas.tseries.offsets import DateOffset, Week
 import matplotlib.pyplot as plt
 class DataExtractor():
-    def __init__(self,df,interpolator ="bicubic",test = False):
+    def __init__(self,interpolator ="linear",test = False,data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv'):
        self.test = test
-       self.df = df
+       self.data_path = data_path
+       self.df = pd.read_csv(os.path.join(os.getcwd(),'Data',data_path))
+       self.rates = pd.read_csv(os.path.join(os.getcwd(),'Data',rates_path))
        self.gen_dict = {}
        self.data = {}
        self.interpolator = interpolator
@@ -52,18 +54,21 @@ class DataExtractor():
         # print(exp_date)
         days_to_expiry = (pd.to_datetime(exp_date,format="%Y%m%d")-pd.to_datetime(date, format="%Y%m%d")).days
         # print("days",days_to_expiry)
+        z = self.rates[self.rates.TradeDate==date]
         x = self.df[self.df.TradeDate==date].iloc[0]
         x.loc['days_to_expiry']=days_to_expiry
-        risk_free_rate = compute_risk_free_rate(x)
-        px,delta,gama,vega,theta,rho = surface_genrator.compute_px(flag,adj_spot,days_to_expiry,risk_free_rate,stk)
+        # check risk free rate already computed
+        risk_free_rate = compute_risk_free_rate(z,days_to_expiry)
+        imp_vol = surface_genrator.get_implied_volatility(days_to_expiry,risk_free_rate,stk,adj_spot)
+        px,delta,gama,vega,theta,rho = surface_genrator.compute_px(flag,date,adj_spot,days_to_expiry,risk_free_rate,stk)
         if self.test:
             self.gen_dict[date] = surface_genrator
-        return px,delta,gama,vega,theta,rho    
+        return px,delta,gama,vega,theta,rho,risk_free_rate,imp_vol   
 
     def check_moneyness(self,df_trade, moneyness):
-        idx = (df_trade['AbsMoneyness'] - moneyness).abs().idxmin()
-        mn = df_trade.AbsMoneyness.loc[idx]
-        df_trade = df_trade[df_trade.AbsMoneyness==mn]
+        idx = (df_trade['Moneyness'] - moneyness).abs().idxmin()
+        mn = df_trade.Moneyness.loc[idx]
+        df_trade = df_trade[df_trade.Moneyness==mn]
         return df_trade
 
     def extract_data(self,expiry_in_months = 3,moneyness = 90,callput = 'c',hold=1,bot=1,symbool = 'EV',start_date = None,end_date= None,test=False):
@@ -73,10 +78,11 @@ class DataExtractor():
         if end_date:
             dates = dates[dates<=end_date]
 
-        self.df = self.df[self.df.Volume>0]
+        self.df = self.df[(self.df.Volume>0)|(self.df.Flag==1)]
         opt_list = []
+        
         for i in range(0,len(dates),bot):
-            current_df = self.df[(self.df.Month_To_Expiry==expiry_in_months)&(self.df.TradeDate==dates[i])&(self.df.CallPut ==callput)]
+            current_df = self.df[(self.df.Month_To_Expiry==expiry_in_months)&(self.df.TradeDate==dates[i])&(self.df.CallPut ==callput)&(self.df.Moneyness>moneyness-5)&(self.df.Moneyness<moneyness+5)]
             flag = False
             date = dates[i]
             if i+hold<len(dates-1):
@@ -90,21 +96,12 @@ class DataExtractor():
             
             if not current_df[current_df.days_to_expiry>=days].empty:
                 df_trade = current_df[current_df.days_to_expiry>=days]
-
-                if not df_trade[(df_trade.Moneyness==moneyness)].empty:
-                    df_trade = df_trade[df_trade.Moneyness==moneyness]
-
-                else:
-                    df_trade = self.check_moneyness(df_trade, moneyness)
+                df_trade = self.check_moneyness(df_trade, moneyness)
                 days_valid = df_trade.days_to_expiry.min()
 
             elif not current_df[current_df.days_to_expiry<days].empty:
                 df_trade = current_df[current_df.days_to_expiry<days]
-                if df_trade[(df_trade.Moneyness==moneyness)].shape[0]>=1:
-                    df_trade = df_trade[df_trade.Moneyness==moneyness]
-
-                else:
-                    df_trade = self.check_moneyness(df_trade, moneyness)
+                df_trade = self.check_moneyness(df_trade, moneyness)
                 days_valid = df_trade.days_to_expiry.max()
 
             else:
@@ -113,12 +110,11 @@ class DataExtractor():
                 while fl:
                     df_trade = self.df[(self.df.TradeDate==dates[i])&(self.df.CallPut ==callput)&(self.df.days_to_expiry>=days)&
                                 (self.df.Month_To_Expiry==expiry_in_months+add_factor)]
-                    if df_trade.shape[0]>=1:
+                    if df_trade[(df_trade.Moneyness>moneyness-5)&(df_trade.Moneyness<moneyness+5)].shape[0]>=1:
                         
-                        if df_trade[df_trade.Moneyness==moneyness].shape[0]>=1:
-                            df_trade = df_trade[df_trade.Moneyness==moneyness]
-                        else:
-                            df_trade = self.check_moneyness(df_trade, moneyness)
+                        
+                       
+                        df_trade = self.check_moneyness(df_trade[(df_trade.Moneyness>moneyness-5)&(df_trade.Moneyness<moneyness+5)], moneyness)
                         days_valid = df_trade.days_to_expiry.min()
 
                     else:
@@ -137,31 +133,39 @@ class DataExtractor():
                         surface_genrator.gen_spline()
                         # surface_genrator.abs_error(x,y,z)
                         adj_spot = self.df[self.df.TradeDate==date].AdjSpot.iloc[0]
-                        days_to_expiry,exp_date = self.get_days(date,expiry_in_months,pd.to_datetime(x,format="%Y%m%d").unique(), pd.to_datetime(self.df.AdjExpiry).unique())
-                        exp_list =exp_date.split('-')
-                    
+                        days_to_expiry,exp_date = self.get_days(date,expiry_in_months,pd.to_datetime(x,format="%Y%m%d").unique(), pd.to_datetime(self.df.AdjExpiry,format="%Y%m%d").unique())
                         
-                        adj_expiry = self.df[self.df.AdjExpiry==exp_date].iloc[0].AdjExpiry
-                        fmtexpdt = self.df[self.df.AdjExpiry==exp_date].iloc[0].FmtExpiryDate
-                        expspot = self.df[self.df.AdjExpiry==exp_date].iloc[0].ExpirySpot
-                        x = self.df[self.df.TradeDate==date].iloc[0]
-                        x.loc['days_to_expiry']=days_to_expiry
-                        risk_free_rate = compute_risk_free_rate(x)
-                        available_strikes = np.unique(y)
-                        stk = available_strikes[np.abs(available_strikes-moneyness*adj_spot/100).argmin()]
+                        exp_list =exp_date.split('-')
                         exp_date =''
                         for j in exp_list:
                             exp_date+=j
+                        
                         exp_date = int(exp_date)
                         # print(exp_date)
-
-                        px,delta,gama,vega,theta,rho = surface_genrator.compute_px(callput,adj_spot,days_to_expiry,risk_free_rate,stk)
+                    
+                        
+                        # adj_expiry = self.df[self.df.AdjExpiry==exp_date].iloc[0].AdjExpiry
+                        # FmtExpiryDate no longer exists
+                        # fmtexpdt = self.df[self.df.AdjExpiry==exp_date].iloc[0].FmtExpiryDate
+                        expspot = self.df[self.df.AdjExpiry==exp_date].iloc[0].ExpirySpot
+                        x = self.df[self.df.TradeDate==date].iloc[0]
+                        x.loc['days_to_expiry']=days_to_expiry
+                        z = self.rates[self.rates.TradeDate==date]
+                        risk_free_rate = compute_risk_free_rate(z,days_to_expiry)
+                        
+                        available_strikes = np.unique(y)
+                        stk = available_strikes[np.abs(available_strikes-moneyness*adj_spot/100).argmin()]
+                        
+                        imp_vol = surface_genrator.get_implied_volatility(days_to_expiry,risk_free_rate,stk,adj_spot)
+                        px,delta,gama,vega,theta,rho = surface_genrator.compute_px(callput,date,adj_spot,days_to_expiry,risk_free_rate,stk)
                         df_trade = self.df[self.df.TradeDate==dates[i]].head(1)
                         df_trade.AdjStrike = stk
+                        df_trade.Strike = (df_trade.Spot/adj_spot)*stk
                         df_trade.ExpiryDate = exp_date
-                        df_trade.AdjExpiry = adj_expiry
-                        df_trade.AskPrice = px
-                        df_trade.BidPrice = px
+                        df_trade.AdjExpiry = exp_date
+                        # ASk and Bid Removed
+                        df_trade.px = px
+                        # df_trade.BidPrice = px
                         df_trade.CallPut = callput
                         df_trade.Symbool = symbool
                         df_trade.Delta = delta
@@ -171,11 +175,17 @@ class DataExtractor():
                         df_trade.Rho = rho
                         df_trade.days_to_expiry = days_to_expiry
                         df_trade.Month_To_Expiry = (pd.to_datetime(exp_date,format="%Y%m%d").year - pd.to_datetime(dates[i],format="%Y%m%d").year) * 12 + (pd.to_datetime(exp_date,format="%Y%m%d").month - pd.to_datetime(dates[i],format="%Y%m%d").month)
-                        df_trade.Moneyness = moneyness
-                        df_trade.AbsMoneyness = round(stk/adj_spot*100,2)
+                        # df_trade.Moneyness = moneyness
+                        df_trade.Moneyness = (stk/adj_spot*100)
                         df_trade.ExpirySpot = expspot
-                        df_trade.FmtExpiryDate = fmtexpdt
+                        df_trade['OpenInterest']=df_trade['Volume']=0
+                        df_trade.risk_free_rate = risk_free_rate
+                        df_trade.ImpliedVolatility = imp_vol
+                        df_trade.Flag =1
+                        # FmtEXpiryDate removed
+                        # df_trade.FmtExpiryDate = fmtexpdt
                         flag = True
+                        
                         if self.test:
                             self.gen_dict[dates[i]] = surface_genrator
                                     
@@ -187,16 +197,16 @@ class DataExtractor():
             if not flag:
                 df_trade = df_trade[df_trade.days_to_expiry==days_valid]
                 if df_trade.shape[0]>1:
-                    idx = (df_trade['AbsMoneyness'] - moneyness).abs().idxmin()
-                    mn = df_trade.AbsMoneyness.loc[idx]
-                    df_trade = df_trade[df_trade.AbsMoneyness==mn]
+                    idx = (df_trade['Moneyness'] - moneyness).abs().idxmin()
+                    mn = df_trade.Moneyness.loc[idx]
+                    df_trade = df_trade[df_trade.Moneyness==mn]
                 
             opt_list.append(df_trade)
             
         df_opt  = pd.concat(opt_list, ignore_index=True)
-
+        
         return df_opt
-    def hold_options(self,data,hold,last_date):
+    def hold_options(self,data,hold,last_date,count):
         df = self.df
         opt_list = []
         f1 = 0
@@ -219,46 +229,45 @@ class DataExtractor():
                 
                 df_opt = data
                 flag = 1
-                
+                count +=1
             elif dates[idx+j] not in df_iv.TradeDate.to_list():
-                if dates[idx+j]< data.ExpiryDate.values[0]:
-                    px,delta,gama,vega,theta,rho = self.get_premium(data.CallPut.values[0],data.AdjStrike.values[0],dates[idx+j],data.ExpiryDate.values[0])
+                # replace ExpiryDate with AdjExpiry next two
+                if dates[idx+j]< data.AdjExpiry.values[0]:
+                    px,delta,gama,vega,theta,rho,rfr,imp_vol = self.get_premium(data.CallPut.values[0],data.AdjStrike.values[0],dates[idx+j],data.AdjExpiry.values[0])
                     flag =1
-                    
+                    count+=1
                     
                 else:
-                    px =0
-                    delta = 0
-                    gama = 0
-                    vega = 0
-                    theta=0
-                    rho=0
+                    px = delta = gama = vega = theta = rho=0
+                    rfr = imp_vol = 0
                     flag =0
                     f2 =1
                     # print(2,dates[idx+j])
                 df_opt = data.copy()
-                df_opt['AskPrice'] = px
-                df_opt['BidPrice'] = px
+                df_opt['px'] = px
+                # df_opt['BidPrice'] = px
                 df_opt['Delta'] = delta
-                df_opt['Gama'] = round(gama,2)
-                df_opt['Vega'] = round(vega,2)
-                df_opt['Theta'] = round(theta,2)
-                df_opt['Rho'] = round(rho,2)
-                df_opt['days_to_expiry'] = (pd.to_datetime(data.ExpiryDate, format="%Y%m%d")-pd.to_datetime(dates[idx+j], format="%Y%m%d")).dt.days
-                df_opt['Month_To_Expiry'] = (pd.to_datetime(data.ExpiryDate,format="%Y%m%d").dt.year - pd.to_datetime(dates[idx+j],format="%Y%m%d").year) * 12 + (pd.to_datetime(data.ExpiryDate,format="%Y%m%d").dt.month - pd.to_datetime(dates[idx+j],format="%Y%m%d").month)
-                
+                df_opt['Gamma'] = gama
+                df_opt['Vega'] = vega
+                df_opt['Theta'] = theta
+                df_opt['Rho'] = rho
+                df_opt['days_to_expiry'] = (pd.to_datetime(data.AdjExpiry, format="%Y%m%d")-pd.to_datetime(dates[idx+j], format="%Y%m%d")).dt.days
+                df_opt['Month_To_Expiry'] = (pd.to_datetime(data.AdjExpiry,format="%Y%m%d").dt.year - pd.to_datetime(dates[idx+j],format="%Y%m%d").year) * 12 + (pd.to_datetime(data.AdjExpiry,format="%Y%m%d").dt.month - pd.to_datetime(dates[idx+j],format="%Y%m%d").month)
+                df_opt['OpenInterest']=df_opt['Volume']=0
                 df_opt['TradeDate'] = dates[idx+j]
                 df_opt.AdjSpot = df[df.TradeDate==dates[idx+j]].AdjSpot.iloc[0]
-                
-                df_opt['AbsMoneyness'] = round(100*data.AdjStrike/df_opt.AdjSpot,2)
-                df_opt['Moneyness'] = (df_opt.AbsMoneyness /10).round()*10
-
+                df_opt.Spot = df[df.TradeDate==dates[idx+j]].Spot.iloc[0]
+                df_opt['Moneyness'] = 100*data.AdjStrike/df_opt.AdjSpot
+                # df_opt['Moneyness'] = (df_opt.AbsMoneyness /10).round()*10
+                # add ExpiryDate and AdjExpiry
+                df_opt.risk_free_rate = rfr
+                df_opt.ImpliedVolatility = imp_vol
                 
             
 
             else:
                 df_opt = df_iv[df_iv.TradeDate == dates[idx+j]]
-                flag =0
+                flag = df_opt['Flag']
                 
             
             df_opt['Flag'] = flag     
@@ -277,10 +286,10 @@ class DataExtractor():
         records_available = records_required-df_opt.Flag.sum()
         backfilled = df_opt.Flag.sum() 
         missing = records_required - records_available -backfilled
-        # print(data.TradeDate.values[0],data.ExpiryDate.values[0],records_available,records_required)
+        # replace ExpiryDate with AdjExpiry
         rec_df = pd.DataFrame({'TradeDate':[data.TradeDate.values[0]], 'Expiry':[data.ExpiryDate.values[0]],'C/P': data.CallPut.values[0],'Moneyness':data.Moneyness.values[0],
                                'Rec Req':[records_required],'Rec Avl':[records_available],'Rec Backfilled':[backfilled],'Rec Missing':[missing]})
-        return df_opt, rec_df
+        return df_opt, rec_df,count
         
    
 
@@ -295,18 +304,25 @@ class DataExtractor():
             last_date = self.df[self.df.Symbol == symbool].TradeDate[self.df[self.df.Symbol == symbool].TradeDate<= end_date].max()
         option_accumulator = []
         missing = []
+        count = 0
         for i in range(df_opt.shape[0]):
             data = df_opt[df_opt.index==i]
             
             if data.TradeDate.values[0] == last_date: # redundant
                 break
-            pnl_frame,df_rec = self.hold_options(data,hold,last_date)
+            pnl_frame,df_rec,count = self.hold_options(data,hold,last_date,count)
 
             option_accumulator.append(pnl_frame)
             missing.append(df_rec)
         df_op = pd.concat(option_accumulator, ignore_index=True)
         msg_data = pd.concat(missing, ignore_index=True)
         self.data[f'mn_{moneyness}_hold_{hold}'] = df_op
+        if count:
+            print(f'current simulation backfilled: {count} records')
+            df = pd.read_csv(os.path.join(os.getcwd(),'Data',self.data_path))
+            df = pd.concat([df,df_op[df_op.Flag==1]],ignore_index=True)
+            df = df.drop_duplicates()
+            df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
 
         return df_op, msg_data
     

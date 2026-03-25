@@ -12,27 +12,28 @@ from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 import warnings
 
-def compute_risk_free_rate(x):
+def compute_risk_free_rate(x,days_to_exp):
     
+
     exp_period = [4,8,13,17,26,52]
-    weeks_to_expiry = round(x['days_to_expiry']/7)
+    weeks_to_expiry = round(days_to_exp/7)
     if f'risk_free_rate_{weeks_to_expiry}' in x.index.to_list() and pd.notna(x[f'risk_free_rate_{weeks_to_expiry}']):
-        risk_free_rate = x[f'risk_free_rate_{weeks_to_expiry}']
+        risk_free_rate = x[f'risk_free_rate_{weeks_to_expiry}'].values[0]
         #print(risk_free_rate)
     elif 4< weeks_to_expiry< 52:
         l_lim = max([i  for i in exp_period if i<weeks_to_expiry])
-        if pd.notna(x[f'risk_free_rate_{l_lim}']):
-            rfr_l = x[f'risk_free_rate_{l_lim}']
+        if pd.notna(x[f'risk_free_rate_{l_lim}'].values[0]):
+            rfr_l = x[f'risk_free_rate_{l_lim}'].values[0]
             
         else:
             l_lim = max([i  for i in exp_period if i<l_lim])
-            rfr_l = x[f'risk_free_rate_{l_lim}']
+            rfr_l = x[f'risk_free_rate_{l_lim}'].values[0]
         u_lim = min([i  for i in exp_period if i>weeks_to_expiry])
-        if pd.notna(x[f'risk_free_rate_{u_lim}']):
-            rfr_u = x[f'risk_free_rate_{u_lim}']
+        if pd.notna(x[f'risk_free_rate_{u_lim}'].values[0]):
+            rfr_u = x[f'risk_free_rate_{u_lim}'].values[0]
         else:
             u_lim = min([i  for i in exp_period if i>u_lim])
-            rfr_u = x[f'risk_free_rate_{u_lim}']
+            rfr_u = x[f'risk_free_rate_{u_lim}'].values[0]
         # print(rfr_l,rfr_u)
         df_l =  np.exp(-rfr_l * 7*l_lim/365) 
         df_u =  np.exp(-rfr_u * 7*u_lim/365)
@@ -41,11 +42,11 @@ def compute_risk_free_rate(x):
         log_df_curr = np.log(df_l) + w * (np.log(df_u) - np.log(df_l))
         risk_free_rate = -log_df_curr/(7*weeks_to_expiry/365)
     elif weeks_to_expiry> 52:
-        df_1 = np.exp(-x.risk_free_rate_52)
-        df_t = df_1*np.exp(-x.risk_free_rate_52*((x.days_to_expiry/365)-1))
-        risk_free_rate = -np.log(df_t)/(x.days_to_expiry/365) 
+        df_1 = np.exp(-x.risk_free_rate_52.values[0])
+        df_t = df_1*np.exp(-x.risk_free_rate_52.values[0]*((days_to_exp/365)-1))
+        risk_free_rate = -np.log(df_t)/(days_to_exp/365) 
     else :
-        risk_free_rate = x.risk_free_rate_4
+        risk_free_rate = x.risk_free_rate_4.values[0]
     return risk_free_rate
 
 def compute_iv(x):
@@ -169,12 +170,15 @@ def load_data(path = './Data/master_data.csv'):
     return df
 
 def extract_clean_data(data,flag = 'c',trade_date = 20190131,test =False):
-    data['px'] = (data.AskPrice+data.BidPrice)/2
-    data['risk_free_rate'] = data.apply(lambda x:compute_risk_free_rate(x),axis=1)
-    data['ImpliedVolatility'] = data.apply(lambda x:compute_iv(x),axis=1)
+    # next three lines done in prep
+    # reverting to previus uncomment next 3
+    # data['px'] = (data.AskPrice+data.BidPrice)/2
+    # data['risk_free_rate'] = data.apply(lambda x:compute_risk_free_rate(x),axis=1)
+    # data['ImpliedVolatility'] = data.apply(lambda x:compute_iv(x),axis=1)
     if test:
         print(f'{flag} options traded available on {trade_date}:{data.shape[0]}')
-    data['AdjExpiry'] = data.AdjExpiry.apply(lambda x :date_int_convertor(x))
+    # 'AdjExpiry' already int
+    # data['AdjExpiry'] = data.AdjExpiry.apply(lambda x :date_int_convertor(x))
 
 
     n_data = []
@@ -195,12 +199,12 @@ def extract_clean_data(data,flag = 'c',trade_date = 20190131,test =False):
     data = check_iv(data)
     if test:
         print(f'{flag} options traded available on {trade_date} after removing iv<.01 and iv>5:{data.shape[0]}')
-    data = data[(data.BidPrice!=0)&(data.days_to_expiry>=15)]
+    data = data[(data.px!=0)&(data.days_to_expiry>=15)]
     data = data[data.Volume!=0]
     data['time_to_exp'] = data.days_to_expiry/365
     
-    data = data[data.AbsMoneyness>=70]
-    data = data[data.AbsMoneyness<130]
+    data = data[data.Moneyness>=70]
+    data = data[data.Moneyness<130]
     return data
 
 
@@ -209,7 +213,7 @@ class GenSurface():
     def __init__(self,data,interpolator ="bicubic"):
         # x time axis, y strike axis
         self.data = data[['TradeDate','AdjExpiry','CallPut','ImpliedVolatility','Spot','AdjSpot','Strike','AdjStrike','risk_free_rate','time_to_exp','days_to_expiry','px',
-                          'AbsMoneyness']]
+                          'Moneyness']]
         self.surface = data[['time_to_exp','ImpliedVolatility','AdjStrike']].pivot_table(values =['ImpliedVolatility'],index = 'AdjStrike',columns='time_to_exp')
         # print(f'check self.surface for discountinities and update')
         self.interpolator = interpolator
@@ -480,13 +484,13 @@ class GenSurface():
             imp_vol = self.n_interp(x,y)
 
         return imp_vol
-    def compute_px(self,flag,adjspot,days_to_expiry,risk_free_rate,stk,fl =True):
+    def compute_px(self,flag,tradedate,adjspot,days_to_expiry,risk_free_rate,stk,fl =True):
         days =365
         imp_vol =  self.get_implied_volatility(days_to_expiry,risk_free_rate,stk,adjspot)
         # imp_vol = max(1e-1,imp_vol)
         # print(imp_vol)
         px = bs(flag,adjspot,stk,days_to_expiry/days,risk_free_rate,imp_vol)
-        valid_px = self.data[self.data.px>0].px.min()
+        valid_px = self.data[(self.data.px>0)&(self.data.TradeDate==tradedate)].px.min()
         if px<=valid_px:
             px = valid_px
         
@@ -503,7 +507,7 @@ class GenSurface():
     def scatter_plot_px_exp(self,ax,exp):
         data = self.data[['TradeDate','AdjExpiry','CallPut','AdjSpot','days_to_expiry','risk_free_rate','AdjStrike','px']]
         data = data[data.AdjExpiry==exp]
-        data['px_cmpt'] = data.apply(lambda x: self.compute_px(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,fl = False),axis=1)
+        data['px_cmpt'] = data.apply(lambda x: self.compute_px(x.CallPut,x.TradeDate,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,fl = False),axis=1)
         ax.scatter(data.AdjStrike,data.px_cmpt.values,label = 'Computed')
         ax.scatter(data.AdjStrike,data.px.values, label = 'Market')
         trade_date = data.TradeDate.iloc[0]
@@ -517,7 +521,7 @@ class GenSurface():
     def scatter_plot_px_stk(self,ax,stk):
         data = self.data[['TradeDate','AdjExpiry','CallPut','AdjSpot','days_to_expiry','risk_free_rate','AdjStrike','px']]
         data = data[data.AdjStrike==stk]
-        data['px_cmpt'] = data.apply(lambda x: self.compute_px(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,fl = False),axis=1)
+        data['px_cmpt'] = data.apply(lambda x: self.compute_px(x.CallPut,x.TradeDate,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,fl = False),axis=1)
         ax.scatter(data.days_to_expiry,data.px_cmpt.values,label = 'Computed')
         ax.scatter(data.days_to_expiry,data.px.values, label = 'Market')
         ax.plot(data.days_to_expiry,data.px_cmpt.values)
@@ -551,9 +555,9 @@ class GenSurface():
                 data = self.scatter_plot_px_exp(ax,key)
                 ind+=1
         # IV comparison stk
-        stk_90 = self.data.AdjStrike.iloc[(self.data.AbsMoneyness-90).abs().argmin()]
-        stk_110 = self.data.AdjStrike.iloc[(self.data.AbsMoneyness-110).abs().argmin()]
-        stk_120 = self.data.AdjStrike.iloc[(self.data.AbsMoneyness-120).abs().argmin()]
+        stk_90 = self.data.AdjStrike.iloc[(self.data.Moneyness-90).abs().argmin()]
+        stk_110 = self.data.AdjStrike.iloc[(self.data.Moneyness-110).abs().argmin()]
+        stk_120 = self.data.AdjStrike.iloc[(self.data.Moneyness-120).abs().argmin()]
         for i,key in enumerate(self.stk_dict.keys()):
             
             

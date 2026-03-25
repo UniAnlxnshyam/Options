@@ -123,6 +123,7 @@ def compute_risk_free_rate(x):
 def load_preprocess(path = 'Options_AAPL_Monthly.csv'):
     
     df = pd.read_csv(os.path.join(base_path,path))
+    df = df.drop_duplicates()
     print(df.info())
     df['AdjStrike'] = df.apply(lambda x:adjust_stock(x,sp="Strike"),axis=1)
     df['AskPrice'] = df.apply(lambda x:adjust_stock(x,sp="AskPrice"),axis=1)
@@ -200,12 +201,14 @@ def merge_data(path_options,path_stock):
     df['px'] = (df.AskPrice+df.BidPrice)/2
     df['risk_free_rate'] = df.apply(lambda x:compute_risk_free_rate(x),axis=1)
     df['AdjExpiry'] = df.AdjExpiry.apply(lambda x :date_int_convertor(x))
+    rfr_df = df[['TradeDate','risk_free_rate_4','risk_free_rate_6', 'risk_free_rate_8',
+                 'risk_free_rate_13', 'risk_free_rate_17', 'risk_free_rate_26','risk_free_rate_52']]
+    rfr_df = rfr_df.drop_duplicates()
     df = df.drop(columns=["FmtTradeDate","FmtExpiryDate",'risk_free_rate_4','risk_free_rate_6', 'risk_free_rate_8',
                           'risk_free_rate_13', 'risk_free_rate_17', 'risk_free_rate_26','risk_free_rate_52',
-                          'BidPrice', 'AskPrice', 'BidImpliedVolatility','AskImpliedVolatility'])
+                          'BidPrice', 'AskPrice', 'BidImpliedVolatility','AskImpliedVolatility','LastTradePrice'])
     # df['D1'] = df.Delta
-    df['AbsMoneyness'] = 100*(df.AdjStrike/df.AdjSpot)
-    df['Moneyness'] =(df.AbsMoneyness /10).round()*10
+    df['Moneyness'] = 100*(df.AdjStrike/df.AdjSpot)
     df['ImpliedVolatility']=df.apply(lambda x:compute_iv(x),axis=1)
     df['params'] = df.apply(lambda x: compute_greeks(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,x.ImpliedVolatility),axis=1)
     for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho']):
@@ -213,6 +216,7 @@ def merge_data(path_options,path_stock):
     df =df.drop(columns='params')
     df['Flag'] = 0
     df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
+    rfr_df.to_csv(os.path.join(os.getcwd(),'Data','RiskFreeRates.csv'),index=False)
     return df
 
 
