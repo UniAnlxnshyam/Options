@@ -213,7 +213,7 @@ class GenSurface():
     def __init__(self,data,interpolator ="bicubic"):
         # x time axis, y strike axis
         self.data = data[['TradeDate','AdjExpiry','CallPut','ImpliedVolatility','Spot','AdjSpot','Strike','AdjStrike','risk_free_rate','time_to_exp','days_to_expiry','px',
-                          'Moneyness']]
+                          'Moneyness','Delta']]
         self.surface = data[['time_to_exp','ImpliedVolatility','AdjStrike']].pivot_table(values =['ImpliedVolatility'],index = 'AdjStrike',columns='time_to_exp')
         # print(f'check self.surface for discountinities and update')
         self.interpolator = interpolator
