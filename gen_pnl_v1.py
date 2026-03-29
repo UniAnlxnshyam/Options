@@ -4,7 +4,7 @@ from data_prep import *
 import os
 from pandas.tseries.offsets import DateOffset, Week
 import matplotlib.pyplot as plt
-from data_extractor import *
+from data_extractor_v1 import *
 
 # def get_premium(df,flag,stk,date,exp_date,interpolator = 'bicubic'):
 #     data = extract_clean_data(df,flag = flag,trade_date=date)
@@ -68,7 +68,7 @@ def compute_pnl(data,mt,bot_on,spot):
     return data_st
 
 
-def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',moneyness = 100, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',capital = 10000000,
+def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',moneyness = 100,delta = None,bydelta=False, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',capital = 10000000,
                     interpolator ='bicubic',symbool='EV',start_date = None,end_date= None):
     df = pd.read_csv(os.path.join(os.getcwd(),'Data',data_path))
     if buysell=='buy':
@@ -77,7 +77,7 @@ def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRat
         mt=-1
     
     data_gen = DataExtractor(interpolator=interpolator,data_path = data_path,rates_path = rates_path)
-    df_opt,_ = data_gen.gen_data(moneyness = moneyness, time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
+    df_opt,_ = data_gen.gen_data(moneyness = moneyness,delta = delta, bydelta=bydelta,time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
                                  symbool=symbool,start_date =start_date,end_date= end_date)
     # df_opt['NextSpot'] = df_opt.Spot.shift(-1)
     # df_opt['NextSpot'] = df_opt['NextSpot'].ffill()
