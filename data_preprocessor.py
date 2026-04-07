@@ -20,7 +20,7 @@ def date_int_convertor(date):
         fmt_date+=item
 
     return int(fmt_date)
-def adjust_stock(x,sp = 'Spot',rf = 4):
+def adjust_stock(x,sp = 'Spot',):
     
     if x.TradeDate<20140609:
         factor = 28
@@ -29,7 +29,7 @@ def adjust_stock(x,sp = 'Spot',rf = 4):
     else:
         factor = 1
     {''}
-    adj_spot =  round(x[sp]/factor,rf)
+    adj_spot =  x[sp]/factor
     return adj_spot
 def date_formatting(date):
     obj = date.split('/')

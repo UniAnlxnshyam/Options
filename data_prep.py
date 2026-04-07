@@ -162,7 +162,7 @@ def date_int_convertor(date):
 
     return int(fmt_date)
 
-def load_data(path = './Data/master_data.csv'):
+def load_data(path = './Data/AAPL_master_data.csv'):
     df = pd.read_csv(path)
     df = df.drop_duplicates()
     print(f'no of cols ={len(df.columns)}')   
@@ -202,9 +202,11 @@ def extract_clean_data(data,flag = 'c',trade_date = 20190131,test =False):
     data = data[(data.px!=0)&(data.days_to_expiry>=15)]
     data = data[data.Volume!=0]
     data['time_to_exp'] = data.days_to_expiry/365
+    if data.CallPut.iloc[0] =='c':
+        data = data[(data.Delta>=.04)&(data.Delta<.6)]
+    else:
+        data = data[(data.Delta<=-.04)&(data.Delta>-.6)]
     
-    data = data[data.Moneyness>=70]
-    data = data[data.Moneyness<130]
     return data
 
 
@@ -275,9 +277,13 @@ class GenSurface():
                             idx = i
                             
                         else:
-                            list_ind.append(self.surface.index[i+1])
+                            if len(sg[i][~np.isnan(sg[i])])<len(sg[i+1][~np.isnan(sg[i+1])]):
+                                list_ind.append(self.surface.index[i])
+                                idx=i
+                            else:
+                                list_ind.append(self.surface.index[i+1])
                             # self.surface = self.surface.drop(index=self.surface.index[i+1])
-                            idx = i+1
+                                idx = i+1
             self.surface = self.surface.drop(index=list_ind)
             if len(status) == sum(status):
                 break
@@ -344,6 +350,7 @@ class GenSurface():
         sorted_exp = np.sort(self.data.AdjExpiry.unique())
         # print(f'sorted exp :{sorted_exp}')
         if len(sorted_x)==len(sorted_exp):
+            
             
             for i in range(len(sorted_x)):
                 self.exp_dict[sorted_exp[i]]=sorted_x[i]
@@ -470,10 +477,11 @@ class GenSurface():
         
 
     def get_implied_volatility(self,days_to_exp,risk_free_rate,stk,adjspot):
-        days =365        
+        days =365  
+              
         time_to_exp = days_to_exp/days
         df = np.exp(risk_free_rate*days_to_exp/days)
-        fwd_mn = np.log(stk/df*adjspot)
+        fwd_mn = np.log(stk/(df*adjspot))
         x = np.sqrt(time_to_exp) # - self.x_mean) / self.x_std
         y = fwd_mn # - self.y_mean) / self.y_std
         if self.interpolator=='bicubic':
