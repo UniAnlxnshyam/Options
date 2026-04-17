@@ -133,6 +133,7 @@ def load_preprocess(path = 'Options_AAPL_Monthly.csv'):
     df["FmtExpiryDate"] = pd.to_datetime(df["ExpiryDate"], format="%Y%m%d")
     last_dates = (df.groupby(df["FmtTradeDate"].dt.to_period("M"))["FmtTradeDate"].max())
     df['Symbol'] = df.FmtTradeDate.apply(lambda x: symbol(x,last_dates))
+    
 
     return df
 
@@ -145,6 +146,7 @@ def load_stock(path ='AAPL.CSV' ):
                                   '          0.000', '         460287'])
     df = df.rename(columns={'19980501': 'TradeDate',"28.00000000": 'Spot'})
     df['AdjSpot'] =  df.apply(lambda x:adjust_stock(x,sp="Spot"),axis=1)
+
     return df
 def load_risk_free_rates():
     rate_list = []
@@ -217,6 +219,7 @@ def merge_data(path_options,path_stock):
     df['Flag'] = 0
     df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
     rfr_df.to_csv(os.path.join(os.getcwd(),'Data','RiskFreeRates.csv'),index=False)
+    df_spot.to_csv(os.path.join(os.getcwd(),'Data','AAPL_spot.csv'),index=False)
     return df
 
 

@@ -1,4 +1,4 @@
-from data_extractor_v1 import*
+from data_extractor_v3 import DataExtractor as data_extractor
 #from gen_pnl_v1 import*
 from data_preprocessor import*
 from concurrent.futures import ProcessPoolExecutor
@@ -9,28 +9,48 @@ df = pd.read_csv(os.path.join(os.getcwd(),'Data/AAPL_master_data.csv'))
 
 print(df.shape)
 
-def gen_data(mn,cp,sym,ex):
+def gen_data(mn,cp,sym,ex,type):
 
+    if type == 'delta':
+        delta = mn
+        bydelta = True
+        key = f'delta_{mn}_{cp}_{sym}_{ex}'
+        moneyness = None
+    else:
+        moneyness = mn
+        delta = None
+        bydelta = False    
+        key = f'mn_{mn}_{cp}_{sym}_{ex}'
     
-    key = f'mn_{mn}_{cp}_{sym}_{ex}'
-    print(key)
-    data_gen = DataExtractor(interpolator='linear')
+    data_gen = data_extractor(interpolator='linear',callput=cp,symbool=sym)
     print(f'generating {key}')
-    out_data = data_gen.gen_data(delta=mn,bydelta=True,time_to_expiry =ex,callput = cp,bot =1,
+    out_data = data_gen.gen_data(delta=delta,bydelta=bydelta ,time_to_expiry =ex,callput = cp,bot =1,moneyness=moneyness,
                                  hold=ex,symbool=sym,start_date = 20100121,multiprocess=True)
     out_dict = {key : out_data}
     return out_dict
+
     
         
     
-deltas = [5,10,15,20,25,30]
+
+
 
 # data_gen = DataExtractor(interpolator='linear')
-def generate_data(cp,sym,ex):
-    
+def generate_data(cp,sym,ex,type = 'delta'):
     params_list = []
-    for delta in deltas:
-        params_list.append((delta,cp,sym,ex))
+    # if type =='delta':
+    #     deltas = [5,10,15,20,25,30]
+    # else:
+    for sym in ['SP','EV']:    
+        for cp in ['c','p']:
+            if cp =='c':
+                deltas = [100,110,120]
+            elif cp == 'p':
+                deltas = [80,90,100]
+
+        
+            for delta in deltas:
+                params_list.append((delta,cp,sym,ex,type))
 
         # key = f'mn_{mn}_{cp}_{sym}_{ex}'
 
