@@ -4,16 +4,43 @@ from .data_prep import *
 import os
 from pandas.tseries.offsets import DateOffset, Week
 import matplotlib.pyplot as plt
+from .connector import *
+from decimal import Decimal
 import time
-
+ 
 class DataExtractor():
-    def __init__(self,symbool = 'SP',callput ='c',interpolator ="linear",test = False,data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',spot_path = 'AAPL_spot.csv'):
+    def __init__(self,symbool = 'SP',callput ='c',interpolator ="linear",test = False,data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',spot_path = 'AAPL_spot.csv',db = True):
        self.test = test
        self.data_path = data_path
-       self.df = pd.read_csv(os.path.join(os.getcwd(),'Data',data_path))
-       self.df = self.df[(self.df.Symbol==symbool)&(self.df.CallPut==callput)].drop_duplicates()
-       self.rates = pd.read_csv(os.path.join(os.getcwd(),'Data',rates_path))
-       self.spot_data = pd.read_csv(os.path.join(os.getcwd(),'Data',spot_path))
+       self.db = db
+       if db:
+        conn, cursor = get_db()
+
+        self.df = pd.read_sql(f'SELECT * FROM OPTIONS_DATA WHERE CallPut="{callput}" and Symbol="{symbool}"',conn)
+        for col in self.df.columns:
+        
+            if self.df[col].dtype==np.int64:
+                self.df[col] = self.df[col].astype('int32')
+        self.rates = pd.read_sql('SELECT * FROM RISK_FREE_RATES',conn)
+        for col in self.df.columns:
+        
+            if self.df[col].dtype==np.int64:
+                self.df[col] = self.df[col].astype('int32')
+
+        self.spot_data = pd.read_sql('SELECT * FROM AAPL_SPOT',conn)
+        for col in self.df.columns:
+        
+            if self.df[col].dtype==np.int64:
+                self.df[col] = self.df[col].astype('int32')
+        conn.close()
+
+        
+       else:
+
+        self.df = pd.read_csv(os.path.join(os.getcwd(),'Data',data_path))
+        self.df = self.df[(self.df.Symbol==symbool)&(self.df.CallPut==callput)].drop_duplicates()
+        self.rates = pd.read_csv(os.path.join(os.getcwd(),'Data',rates_path))
+        self.spot_data = pd.read_csv(os.path.join(os.getcwd(),'Data',spot_path))
        self.gen_dict = {}
        self.data = {}
        self.interpolator = interpolator
@@ -119,9 +146,8 @@ class DataExtractor():
         risk_free_rate = compute_risk_free_rate(z,days_to_expiry)
         imp_vol = surface_genrator.get_implied_volatility(days_to_expiry,risk_free_rate,stk,adj_spot)
         px,delta,gama,vega,theta,rho = surface_genrator.compute_px(flag,date,adj_spot,days_to_expiry,risk_free_rate,stk)
-        if self.test:
-            self.gen_dict[date] = surface_genrator
-        return px,delta,gama,vega,theta,rho,risk_free_rate,imp_vol   
+        
+        return px,delta,gama,vega,theta,rho,round(risk_free_rate,10),imp_vol   
 
     def check_moneyness(self,df_trade, var,val):
         
@@ -137,7 +163,6 @@ class DataExtractor():
         data = extract_clean_data(data,trade_date=date,flag = callput)
         surface_genrator = GenSurface(data,interpolator=self.interpolator)
         surface_genrator.update_surface()
-        # print(date)
         fwd_mnyness = surface_genrator.fwd_moneyness()
         exp_dates,y= surface_genrator.known_data()
         surface_genrator.gen_spline()
@@ -342,7 +367,7 @@ class DataExtractor():
         df_trade.Moneyness = round(((stk/adj_spot)*100),2)
         df_trade.ExpirySpot = expspot
         df_trade['OpenInterest']=df_trade['Volume']=0
-        df_trade.risk_free_rate = risk_free_rate
+        df_trade.risk_free_rate = round(risk_free_rate,10)
         df_trade.ImpliedVolatility = imp_vol
         df_trade.Flag =current_flag
         # FmtEXpiryDate removed
@@ -380,6 +405,7 @@ class DataExtractor():
         # self.df = self.df[(self.df.Volume>0)|(self.df.Flag==1)]
         opt_list = []
         df  = self.df[self.df.AdjExpiry.apply(lambda x:self.is_third_week_expiry(x))]
+        # print(df.columns)
         date_group = dict(tuple(df.groupby('TradeDate')))
         
         for i in range(0,len(dates),bot):
@@ -450,6 +476,7 @@ class DataExtractor():
                     df_trade = df_trade[df_trade[var]==mn]
                     ###### check
                 if df_trade.shape[0]>1:
+                    print(df_trade)
                     raise ValueError(f'Duplicates for date:{date}')
             else:
                     
@@ -572,10 +599,12 @@ class DataExtractor():
 
 
     def gen_data(self,moneyness = 100,delta=None,bydelta = False, time_to_expiry = 1,callput = 'p',bot =1,hold=1,symbool='EV',start_date = None,end_date= None,multiprocess = False):
-      
+        
         df_opt=self.extract_data(expiry_in_months=time_to_expiry,moneyness=moneyness,delta=delta,bydelta=bydelta,callput=callput,hold =hold,symbool=symbool,
                             start_date = start_date,end_date= end_date,bot=bot)
-       
+        
+        t_c  = toc - tic
+        print(f'extraction time {t_c} ')
         if not end_date:
             last_date = np.sort(self.df[self.df.Symbol == symbool].TradeDate.unique())[-1]
         else:
@@ -599,15 +628,25 @@ class DataExtractor():
         df_op = pd.concat(option_accumulator, ignore_index=True)
         msg_data = pd.concat(missing, ignore_index=True)
         self.data[f'mn_{moneyness}_hold_{hold}'] = df_op
+        
         if not multiprocess:
+            
             print(f'current simulation backfilled: {count} records')
-            df = pd.read_csv(os.path.join(os.getcwd(),'Data',self.data_path))
             df_or = df_op.drop(columns=['TradeStart'])
-            df = pd.concat([df,df_or[df_or.Flag==1]],ignore_index=True)
-            df = df.drop_duplicates()
-            
-            df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
-            
+            if not self.db:    
+                df = pd.read_csv(os.path.join(os.getcwd(),'Data',self.data_path))
+                df = pd.concat([df,df_or[df_or.Flag==1]],ignore_index=True)
+                df = df.drop_duplicates()
+                df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
+            else:
+                
+                
+                populate_table(df_or[df_or.Flag==1],"OPTIONS_DATA")
+     
+        
+
+      
+        
 
         return {'df_options':df_op,'missing_df':msg_data,'count':count}
     

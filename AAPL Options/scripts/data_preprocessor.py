@@ -4,6 +4,7 @@ import os
 import py_vollib.black_scholes.implied_volatility as iv
 from py_vollib.black_scholes import black_scholes as bs
 from py_vollib.black_scholes.greeks.analytical import delta, gamma, vega, theta, rho
+from .connector import *
 import warnings
 warnings.filterwarnings("ignore")
 base_path = os.path.join(os.getcwd(),'Data','Raw Data')
@@ -172,6 +173,11 @@ def load_risk_free_rates():
                               '13 weeks coupon equivalent','17 weeks coupon equivalent', '26 weeks coupon equivalent','52 weeks coupon equivalent',])
     df_r = df_r.sort_values("date", ascending=True)
     return df_r
+def convert_int32(df):
+    for col in df.columns:
+        if df[col].dtype==np.int64:
+            df[col] = df[col].astype('int32')
+    return df
     
 
 
@@ -209,17 +215,28 @@ def merge_data(path_options,path_stock):
     df = df.drop(columns=["FmtTradeDate","FmtExpiryDate",'risk_free_rate_4','risk_free_rate_6', 'risk_free_rate_8',
                           'risk_free_rate_13', 'risk_free_rate_17', 'risk_free_rate_26','risk_free_rate_52',
                           'BidPrice', 'AskPrice', 'BidImpliedVolatility','AskImpliedVolatility','LastTradePrice'])
+    df_spot =df_spot.drop(columns=['FmtTradeDate'])
     # df['D1'] = df.Delta
     df['Moneyness'] = round(100*(df.AdjStrike/df.AdjSpot),2)
     df['ImpliedVolatility']=df.apply(lambda x:compute_iv(x),axis=1)
     df['params'] = df.apply(lambda x: compute_greeks(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,x.ImpliedVolatility),axis=1)
-    for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho']):
+    for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho','risk_free_rate']):
         df[item] = df.params.apply(lambda x:round(x[i],10))
     df =df.drop(columns='params')
     df['Flag'] = 0
+    df = convert_int32(df)
     df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
+    create_tabels(df,'OPTIONS_DATA')
+    populate_table(df,'OPTIONS_DATA')
+    rfr_df = convert_int32(rfr_df)
     rfr_df.to_csv(os.path.join(os.getcwd(),'Data','RiskFreeRates.csv'),index=False)
+    create_tabels(rfr_df,'RISK_FREE_RATES')
+    populate_table(rfr_df,'RISK_FREE_RATES')
+    df_spot = convert_int32(df_spot)
     df_spot.to_csv(os.path.join(os.getcwd(),'Data','AAPL_spot.csv'),index=False)
+    create_tabels(df_spot,'AAPL_SPOT')
+    populate_table(df_spot,'AAPL_SPOT')
+
     return df
 
 

@@ -300,6 +300,7 @@ class GenSurface():
         returns log forward moneyness
         """
         rfr = self.data[['risk_free_rate','time_to_exp']]
+        
         rfr = rfr.drop_duplicates()
         rfr['DF'] =np.exp(rfr.risk_free_rate*rfr.time_to_exp)
         rfr = rfr.sort_values(by='time_to_exp')
@@ -317,6 +318,7 @@ class GenSurface():
         
     
     def known_data(self):
+        
         points = np.column_stack((self.X.ravel(), self.Y_f.ravel()))
         """
         column_stack(tup)
@@ -508,7 +510,7 @@ class GenSurface():
         th = theta(flag,adjspot,stk,days_to_expiry/days,risk_free_rate,imp_vol)
         rh = rho(flag,adjspot,stk,days_to_expiry/days,risk_free_rate,imp_vol)
         if fl:
-            return px, round(d,2),round(g,2),round(v,2),round(th,2),round(rh,2)
+            return px, round(d,10),round(g,10),round(v,10),round(th,10),round(rh,10)
         else:
             return px
     

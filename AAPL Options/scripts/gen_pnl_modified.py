@@ -6,6 +6,7 @@ from pandas.tseries.offsets import DateOffset, Week
 import matplotlib.pyplot as plt
 from .data_extractor_v3 import DataExtractor as DataExtractor
 from py_vollib.black_scholes.greeks.analytical import delta as delta_computation
+import time
 
 # def get_premium(df,flag,stk,date,exp_date,interpolator = 'bicubic'):
 #     data = extract_clean_data(df,flag = flag,trade_date=date)
@@ -95,13 +96,21 @@ def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRat
         mt =1
     else:
         mt =-1
-    
+    tic = time.time()
     data_gen = DataExtractor(interpolator=interpolator,data_path = data_path,rates_path = rates_path,symbool = symbool,callput =callput)
+    toc = time.time()
+    tc = toc-tic
+    print(f'init time:{tc}')
+    tic = time.time()
     data_dict = data_gen.gen_data(moneyness = moneyness,delta = delta, bydelta=bydelta,time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
                                  symbool=symbool,start_date =start_date,end_date= end_date)
     # df_opt['NextSpot'] = df_opt.Spot.shift(-1)
     # df_opt['NextSpot'] = df_opt['NextSpot'].ffill()
     # df_opt = df_opt.iloc[:-1]
+    toc = time.time()
+    tc = toc -tic
+    print(f'DG time:{tc} ')
+    tic = time.time()
     df_opt = data_dict['df_options']
     df_opt = df_opt[['TradeDate','AdjExpiry', 'AdjStrike',
                      'AdjSpot', 'ExpirySpot','Moneyness','px', 'Delta',
@@ -234,6 +243,9 @@ def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRat
     # df_active_contracts  = (df_op.groupby('TradeStart').size().reset_index(name='ActiveOptions'))
     # df_op ['NumOfContracts'] = df_op.apply(lambda x: compute_contracts(x,df_active_contracts,capital),axis=1)
     # df_op = df_op.drop(columns =['TradeStart'])
+    toc = time.time()
+    tc = toc-tic
+    print(f'pnl :{tc}')
     return df_op
     
 
