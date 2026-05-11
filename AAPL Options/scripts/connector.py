@@ -7,7 +7,7 @@ import os
 
 load_dotenv()
 pwd = os.getenv("DB_PASSWORD")
-allowed_tables = {"OPTIONS_DATA", "RISK_FREE_RATES", "AAPL_SPOT"}
+allowed_tables = {"OPTIONS_DATA", "RISK_FREE_RATES", "AAPL_SPOT","OPTION_KEY","CONNECTION"}
 
 def get_db():
     conn = mysql.connector.connect(
@@ -134,10 +134,86 @@ def get_cols(tablename):
     cursor.close()
     return cols
 
+def create_secondary_tabels():
+    conn, cursor = get_db()
+    cursor.execute('USE test_db')
+    cursor.execute("CREATE TABLE  OPTION_KEY(OptionKey VARCHAR(50) PRIMARY KEY); ")
+    cursor.execute("""CREATE TABLE  CONNECTION(OptionKey VARCHAR(50), TradeStart INT,TradeDate INT,
+                   AdjExpiry INT,AdjStrike DOUBLE,CallPut CHAR(1),
+                   PRIMARY KEY (OptionKey, TradeStart,TradeDate, CallPut),FOREIGN KEY (OptionKey)
+                   REFERENCES OPTION_KEY(OptionKey),FOREIGN KEY (TradeDate, AdjExpiry,AdjStrike,CallPut)
+                   REFERENCES OPTIONS_DATA(TradeDate, AdjExpiry,AdjStrike,CallPut));""")
+    
+    conn.commit()
+    cursor.close()
+def write_opt_key(key):
+    conn, cursor = get_db()
+    cursor.execute('USE test_db')
+    cursor.execute(f'INSERT IGNORE INTO OPTION_KEY (OptionKey) VALUES (%s);',(key,))
+    conn.commit()
+    cursor.close()
+
+def check_key(key):
+    conn, cursor = get_db()
+    cursor.execute("""
+    SELECT EXISTS (
+        SELECT 1
+        FROM OPTION_KEY
+        WHERE OptionKey = %s
+    )
+    """, (key,))
+
+    exists = cursor.fetchone()[0]
+    cursor.close()
+    return exists
+
+def extract_from_db(key):
+    conn, cursor = get_db()
+    df = pd.read_sql(f"""SELECT a.* FROM OPTIONS_DATA a RIGHT JOIN CONNECTION b
+                     ON a.TradeDate = b.TradeDate and a.AdjExpiry = b.AdjExpiry
+                     and a.AdjStrike = b.AdjStrike and a.CallPut = b.CallPut    
+                     WHERE b.OptionKey='{key}' ORDER by AdjExpiry, TradeDate;""",conn)
+
+    cursor.close()                                                                              
 
 
+    return df
+def extract_start_data(key):
+    conn, cursor = get_db()
+    df = pd.read_sql(f"""SELECT a.* FROM OPTIONS_DATA a RIGHT JOIN CONNECTION b
+                     ON a.TradeDate = b.TradeDate and a.AdjExpiry = b.AdjExpiry
+                     and a.AdjStrike = b.AdjStrike and a.CallPut = b.CallPut    
+                     WHERE b.OptionKey='{key}' and b.TradeStart = b.TradeDate ORDER by TradeDate;""",conn)
+
+    cursor.close()                                                                              
 
 
+    return df
 
 
+def load_full_data(callput,symbool):
+    conn, cursor = get_db()
+
+        
+
+    df = pd.read_sql(f'SELECT * FROM OPTIONS_DATA WHERE CallPut="{callput}" and Symbol="{symbool}"',conn)
+    for col in df.columns:
+    
+        if df[col].dtype==np.int64:
+            df[col] = df[col].astype('int32')
+    rates = pd.read_sql('SELECT * FROM RISK_FREE_RATES',conn)
+    for col in rates.columns:
+    
+        if rates[col].dtype==np.int64:
+            rates[col] = rates[col].astype('int32')
+
+    spot_data = pd.read_sql('SELECT * FROM AAPL_SPOT',conn)
+    for col in spot_data.columns:
+    
+        if spot_data[col].dtype==np.int64:
+            spot_data[col] = spot_data[col].astype('int32')
+    cursor.close()
+    conn.close()
+
+    return df, rates, spot_data
 

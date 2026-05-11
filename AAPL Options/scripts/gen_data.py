@@ -20,15 +20,15 @@ def gen_data(mn,cp,sym,ex,type,start):
         bydelta = False    
         key = f'mn_{mn}_{cp}_{sym}_{ex}'
     
-    data_gen = data_extractor(interpolator='linear',callput=cp,symbool=sym)
+    data_gen = data_extractor(interpolator='linear',callput=cp,symbool=sym,delta = delta,mn = moneyness,expiry =ex)
     if start:
-        out_data = data_gen.extract_data(delta=delta,bydelta=bydelta ,expiry_in_months=ex,callput = cp,bot =1,moneyness=moneyness,
-                                         hold=ex,symbool=sym,)
+        out_data = data_gen.load_start_data(delta=delta,bydelta=bydelta ,expiry_in_months=ex,callput = cp,bot =1,moneyness=moneyness,
+                                            hold=ex,symbool=sym,)
 
     else:
         print(f'generating {key}')
         out_data = data_gen.gen_data(delta=delta,bydelta=bydelta ,time_to_expiry =ex,callput = cp,bot =1,moneyness=moneyness,
-                                    hold=ex,symbool=sym,start_date = 20100121,multiprocess=True)
+                                    hold=ex,symbool=sym,multiprocess=True)
     out_dict = {key : out_data}
     return out_dict
 

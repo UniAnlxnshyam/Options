@@ -196,7 +196,7 @@ def merge_data(path_options,path_stock):
     df["days_to_expiry"] = (df["AdjExpiry"] - df["FmtTradeDate"]).dt.days
     df['Month_To_Expiry'] = (df.AdjExpiry.dt.year - df.FmtTradeDate.dt.year) * 12 + (df.AdjExpiry.dt.month - df.FmtTradeDate.dt.month)
     df_spot["FmtTradeDate"] = pd.to_datetime(df_spot["TradeDate"], format="%Y%m%d")
-    # merge spot at expiry with main data
+    # merge spot at expiry with main 
     df = df.merge(df_spot, how='left', left_on='AdjExpiry', right_on='FmtTradeDate',
                   suffixes=('', '_expiry')).drop(columns=['FmtTradeDate_expiry','TradeDate_expiry',
                                                           'Spot_expiry']).rename(columns={'AdjSpot_expiry': 'ExpirySpot'})
@@ -207,7 +207,7 @@ def merge_data(path_options,path_stock):
     df = df.drop(columns='date')
     # print(df.columns)
     df['px'] = (df.AskPrice+df.BidPrice)/2
-    df['risk_free_rate'] = df.apply(lambda x:compute_risk_free_rate(x),axis=1)
+    df['risk_free_rate'] = round(df.apply(lambda x:compute_risk_free_rate(x),axis=1),10)
     df['AdjExpiry'] = df.AdjExpiry.apply(lambda x :date_int_convertor(x))
     rfr_df = df[['TradeDate','risk_free_rate_4','risk_free_rate_6', 'risk_free_rate_8',
                  'risk_free_rate_13', 'risk_free_rate_17', 'risk_free_rate_26','risk_free_rate_52']]
@@ -220,9 +220,11 @@ def merge_data(path_options,path_stock):
     df['Moneyness'] = round(100*(df.AdjStrike/df.AdjSpot),2)
     df['ImpliedVolatility']=df.apply(lambda x:compute_iv(x),axis=1)
     df['params'] = df.apply(lambda x: compute_greeks(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,x.ImpliedVolatility),axis=1)
-    for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho','risk_free_rate']):
+    for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho']):
         df[item] = df.params.apply(lambda x:round(x[i],10))
+
     df =df.drop(columns='params')
+    
     df['Flag'] = 0
     df = convert_int32(df)
     df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
@@ -236,6 +238,7 @@ def merge_data(path_options,path_stock):
     df_spot.to_csv(os.path.join(os.getcwd(),'Data','AAPL_spot.csv'),index=False)
     create_tabels(df_spot,'AAPL_SPOT')
     populate_table(df_spot,'AAPL_SPOT')
+    create_secondary_tabels()
 
     return df
 

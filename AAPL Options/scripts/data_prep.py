@@ -214,7 +214,7 @@ def extract_clean_data(data,flag = 'c',trade_date = 20190131,test =False):
 class GenSurface():
     def __init__(self,data,interpolator ="bicubic"):
         # x time axis, y strike axis
-        self.data = data[['TradeDate','AdjExpiry','CallPut','ImpliedVolatility','Spot','AdjSpot','Strike','AdjStrike','risk_free_rate','time_to_exp','days_to_expiry','px',
+        self.data = data[['TradeDate','AdjExpiry','CallPut','ImpliedVolatility','AdjSpot','AdjStrike','risk_free_rate','time_to_exp','days_to_expiry','px',
                           'Moneyness','Delta']]
         self.surface = data[['time_to_exp','ImpliedVolatility','AdjStrike']].pivot_table(values =['ImpliedVolatility'],index = 'AdjStrike',columns='time_to_exp')
         # print(f'check self.surface for discountinities and update')
@@ -435,7 +435,7 @@ class GenSurface():
         ax.set_xlabel("Days to Expiry")
         ax.set_ylabel("Strike")
         ax.set_zlabel("Implied Volatility")
-        ax.set_title("Volatility Surface, Spot=166.44,Trade Date = 20190131")
+        ax.set_title("Volatility Surface,Trade Date = 20190131")
         ax.view_init(elev=elev, azim=azim)
 
         plt.tight_layout()
