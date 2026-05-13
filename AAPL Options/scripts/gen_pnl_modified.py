@@ -330,6 +330,8 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
     multiplyer = 1 
     if callput == "p":
         multiplyer = -1
+
+    
     for k,v in date_group.items():
         # for delta hedging (dh)
         imp_vol = v.ImpliedVolatility.iloc[0]
@@ -377,6 +379,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
        
         if option_pnl.shape[0]< hold and option_pnl.TradeDate.iloc[-1]<v.AdjExpiry.iloc[-1] and option_pnl.TradeDate.iloc[-1]<=last_trade:
 
+
             data_st = option_pnl.iloc[[-1]]
             
             trade_date = dates[dates>data_st.TradeDate.values[0]][0]
@@ -410,25 +413,23 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
             data_st['SpotEnd'] = closing_spot
             option_pnl = pd.concat([option_pnl,data_st], ignore_index=True)
             
-        if dh!= 'off':
-                
-                option_pnl['dhi'] =option_pnl['OptPnl']+(stock*(option_pnl['SpotEnd']-option_pnl['AdjSpot'])/option_pnl['OptPxBot'])
-                option_pnl['Delta_Start'] =  vectorized_delta(flag=option_pnl['CallPut'],
-                                                              S=option_pnl['AdjSpot'],
-                                                              K=option_pnl['AdjStrike'],
-                                                              t=option_pnl['days_to_expiry']/365,
-                                                              r=option_pnl['risk_free_rate'],
-                                                              sigma=option_pnl['iv_start'],
-                                                              model='black_scholes')
-                option_pnl['dhiv'] =option_pnl['OptPnl']+(option_pnl['Delta_Start']*(option_pnl['SpotEnd']-option_pnl['AdjSpot'])/option_pnl['OptPxBot'])
-                option_pnl['dhmv'] =option_pnl['OptPnl']+(option_pnl['Delta']*(option_pnl['SpotEnd']-option_pnl['AdjSpot'])/option_pnl['OptPxBot'])  
-                
-
-        # ________
-        
-        
         option_accumulator.append(option_pnl)
+        
     df_opt = pd.concat(option_accumulator, ignore_index=True)
+    if dh!= 'off':
+                
+        df_opt['dhi'] =df_opt['OptPnl']+(stock*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
+        
+        df_opt['Delta_Start'] =  vectorized_delta(flag=df_opt['CallPut'],
+                                                        S=df_opt['AdjSpot'],
+                                                        K=df_opt['AdjStrike'],
+                                                        t=df_opt['days_to_expiry']/365,
+                                                        r=df_opt['risk_free_rate'],
+                                                        sigma=df_opt['iv_start'],
+                                                        model='black_scholes')
+        df_opt['dhiv'] =df_opt['OptPnl']+(df_opt['Delta_Start']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
+        df_opt['dhmv'] =df_opt['OptPnl']+(df_opt['Delta']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])  
+                
     
     if dh =='off':
         cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
@@ -437,7 +438,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
     else : 
          cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
                 'ExpirySpot','OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
-                'SpotStart','OptPnl','dhi','dhiv','dhmv','TradeStart','PxStart','Delta_Start','iv_start']
+                'SpotStart','OptPnl','dhi','dhiv','dhmv','TradeStart','PxStart','Delta_Start','iv_start','CallPut','AdjStrike','days_to_expiry','risk_free_rate']
 
         
     df_op = df_opt[cols]
@@ -458,7 +459,7 @@ def wealth_computation(df,sizing ='notional',pct = 1,num_contracts =1000,contrac
         opt_df['OptPnlNotional'] = contract_size*opt_df.NumContracts*(opt_df.OptPxBot*opt_df.OptPnl)
         agg_pnl = opt_df.groupby(by='TradeDate').OptPnlNotional.sum()        
         wealth  = init_cap+agg_pnl.cumsum()
-        
+       
         if dh!='off':
             opt_df['dhi_PnlNotional'] = contract_size*opt_df.NumContracts*(opt_df.OptPxBot*opt_df.dhi)
             agg_pnl_dhi = opt_df.groupby(by='TradeDate').dhi_PnlNotional.sum()

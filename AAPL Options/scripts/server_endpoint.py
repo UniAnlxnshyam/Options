@@ -43,6 +43,8 @@ class Item(BaseModel):
     value        : int
     dh           : DeltaHedging
     percent      : int
+    start_date   : int | None
+    end_date     : int | None
     pnl          : Literal[0, 1]
 def get_pnl_wealth(data):
     if data['mn_dt'].value=='delta':
@@ -53,9 +55,11 @@ def get_pnl_wealth(data):
         delta = None
         mn = data['strike']
         bydelta = False
-    opt_pnl = gen_options_pnl(delta = delta,bydelta=bydelta,moneyness=mn,time_to_expiry=data['maturity'],callput=data['option'].value,
-                              bot=data['open'],hold=data['close'],symbool=data['symbol'].value,dh = data['dh'].value)
-    opt_pnl,wealth = wealth_computation(opt_pnl,sizing = data['sizing'].value,hold = data['close'],dh = data['dh'].value,pct = data['percent'])
+    opt_pnl = gen_options_pnl_v1(delta = delta,bydelta=bydelta,moneyness=mn,time_to_expiry=data['maturity'],callput=data['option'].value,
+                              bot=data['open'],hold=data['close'],symbool=data['symbol'].value,dh = data['dh'].value,start_date=data['start_date'],
+                              end_date=data['end_date'])
+    opt_pnl,wealth = wealth_computation(opt_pnl,sizing = data['sizing'].value,hold = data['close'],dh = data['dh'].value,pct = data['percent'],
+                                        value = data['value'])
 
     return opt_pnl.to_json(orient = 'split'),wealth.to_json(orient='split')
 
