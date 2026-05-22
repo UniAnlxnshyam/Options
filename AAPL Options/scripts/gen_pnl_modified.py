@@ -10,24 +10,7 @@ from py_vollib.black_scholes.greeks.analytical import delta as delta_computation
 from py_vollib_vectorized import vectorized_delta
 import time
 
-# def get_premium(df,flag,stk,date,exp_date,interpolator = 'bicubic'):
-#     data = extract_clean_data(df,flag = flag,trade_date=date)
-#     surface_genrator = GenSurface(data,interpolator=interpolator)
-#     surface_genrator.update_surface()
-#     # print(date)
-#     fwd_mnyness = surface_genrator.fwd_moneyness()
-#     x,y= surface_genrator.known_data()
-#     surface_genrator.gen_spline()
-#     # surface_genrator.abs_error(x,y,z)
-#     adj_spot = df[df.TradeDate==date].AdjSpot.iloc[0]
-#     # print(exp_date)
-#     days_to_expiry = (pd.to_datetime(exp_date,format="%Y%m%d")-pd.to_datetime(date, format="%Y%m%d")).days
-#     # print("days",days_to_expiry)
-#     x = df[df.TradeDate==date].iloc[0]
-#     x.loc['days_to_expiry']=days_to_expiry
-#     risk_free_rate = compute_risk_free_rate(x)
-#     px,delta,gama,vega,theta,rho = surface_genrator.compute_px(flag,adj_spot,days_to_expiry,risk_free_rate,stk)
-#     return px,delta
+
 def fetch_from_db(trade_date):
             
     conn, cursor = get_db()
@@ -61,44 +44,44 @@ def stock_pnl(data_st,spot_end,stock=None,iv=None):
             
     return dh_inception,dh_inception_vol,dh_market_vol
 
-def compute_pnl(data,mt,bot_on,spot,px_trade_start,multiplyer,dh='off',stock = None,iv= None):
+# def compute_pnl_v1(data,mt,bot_on,spot,px_trade_start,multiplyer,dh='off',stock = None,iv= None):
     
-    data_st = data[data.index==data.index[0]]
-    data_st = data_st.copy()
-    data_end = data[data.index==data.index[1]]
-    px_start = data_st.px.values[0]
-    px_end = data_end.px.values[0]
+#     data_st = data[data.index==data.index[0]]
+#     data_st = data_st.copy()
+#     data_end = data[data.index==data.index[1]]
+#     px_start = data_st.px.values[0]
+#     px_end = data_end.px.values[0]
                  
-    if data_end.TradeDate.values[0]< data_st.AdjExpiry.values[0]: 
-        data_st['OptPxTrade'] = px_end
+#     if data_end.TradeDate.values[0]< data_st.AdjExpiry.values[0]: 
+#         data_st['OptPxTrade'] = px_end
         
-    else:
-        data_st['OptPxTrade'] =max(multiplyer*(data_st.ExpirySpot.values[0]-data_st.AdjStrike.values[0]),0)
+#     else:
+#         data_st['OptPxTrade'] =max(multiplyer*(data_st.ExpirySpot.values[0]-data_st.AdjStrike.values[0]),0)
         
 
-    pnl =  (px_end-px_start)/px_start
-    pnl = mt*pnl    
+#     pnl =  (px_end-px_start)/px_start
+#     pnl = mt*pnl    
 
-    data_st['BotOn']=bot_on
-    data_st['PxStart'] = px_trade_start
-    data_st['TradeDate'] = data_end.TradeDate.values[0]
-    data_st['Strike'] = data_end.AdjStrike.values[0]
-    data_st['SpotStart'] = spot
-    data_st['OptPxBot'] = px_start
+#     data_st['BotOn']=bot_on
+#     data_st['PxStart'] = px_trade_start
+#     data_st['TradeDate'] = data_end.TradeDate.values[0]
+#     data_st['Strike'] = data_end.AdjStrike.values[0]
+#     data_st['SpotStart'] = spot
+#     data_st['OptPxBot'] = px_start
     
-    data_st['SpotPct'] = (data_end.AdjSpot.values[0]-data_st.AdjSpot.values[0])/data_st.AdjSpot.values[0]
-    data_st['OptPnl'] = pnl
-    # data_st['TradeStart'] = data_st.TradeDate.values[0]
+#     data_st['SpotPct'] = (data_end.AdjSpot.values[0]-data_st.AdjSpot.values[0])/data_st.AdjSpot.values[0]
+#     data_st['OptPnl'] = pnl
+#     # data_st['TradeStart'] = data_st.TradeDate.values[0]
     
-    if dh!= 'off':
-        dhi,dhiv,dhmv = stock_pnl(data_st,data_end.AdjSpot.values[0],stock=stock,iv=iv)
-        data_st['dhi'] =pnl+dhi/px_start
-        data_st['dhiv'] =pnl+dhiv/px_start
-        data_st['dhmv'] =pnl+dhmv/px_start
-    # data_st = data_st.drop(columns =['AdjStrike','px','days_to_expiry'])
+#     if dh!= 'off':
+#         dhi,dhiv,dhmv = stock_pnl(data_st,data_end.AdjSpot.values[0],stock=stock,iv=iv)
+#         data_st['dhi'] =pnl+dhi/px_start
+#         data_st['dhiv'] =pnl+dhiv/px_start
+#         data_st['dhmv'] =pnl+dhmv/px_start
+#     # data_st = data_st.drop(columns =['AdjStrike','px','days_to_expiry'])
     
-    return data_st
-def compute_pnl_v1(data,mt,bot_on,spot,px_trade_start,imp_vol):
+#     return data_st
+def compute_pnl(data,mt,bot_on,spot,px_trade_start,imp_vol):
     
    
                  
@@ -120,181 +103,12 @@ def compute_pnl_v1(data,mt,bot_on,spot,px_trade_start,imp_vol):
     data['SpotStart'] = spot
     data['iv_start'] = imp_vol
     data['TradeDate'] = data['TradeDate'].astype(int)
+    # data['Spot_at_Expiry'] =fetch_from_db(data.AdjExpiry.iloc[-1])
     return data
 
 
+
 def gen_options_pnl(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',moneyness = 100,delta = None,bydelta=False, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',
-                    interpolator ='bicubic',symbool='EV',start_date = None,end_date= None,dh='off'):
-    
-    
-    if buysell=='buy':
-        mt =1
-    else:
-        mt =-1
-    if bydelta:
-        var ='delta'
-        val = delta
-    else:
-        var ='mn'
-        val = moneyness
-    # opt_key = f'{var}_{val}_{callput}_{symbool}_{time_to_expiry}'
-    
-
-   
-       
-    data_gen = DataExtractor(interpolator=interpolator,data_path = data_path,rates_path = rates_path,symbool = symbool,callput =callput,delta = delta,mn = moneyness,expiry=time_to_expiry)
-    
-    data_dict = data_gen.gen_data(moneyness = moneyness,delta = delta, bydelta=bydelta,time_to_expiry = time_to_expiry,callput = callput,bot =bot,hold=hold,
-                                symbool=symbool,start_date =None,end_date= None)
-    df_opt = data_dict['df_options']
-
-    df_opt = df_opt[['TradeDate','AdjExpiry', 'AdjStrike',
-                     'AdjSpot', 'ExpirySpot','Moneyness','px', 'Delta',
-                     'CallPut', 'Symbol','Flag','TradeStart','ImpliedVolatility','days_to_expiry','risk_free_rate']]
-    
-    dates = np.sort(data_gen.df.TradeDate.unique())
-    if not end_date:
-        last_date = dates[-1]
-        last_trade = dates[-2]
-    else:
-        
-        last_date = dates[dates<= end_date][-1]
-        last_trade = dates[dates<= end_date][-2]
-    # print(last_date,last_trade)
-   
-    option_accumulator = []
-    flag = 0 
-    date_group = dict(tuple(df_opt.groupby('TradeStart')))
-    multiplyer = 1 
-    if callput == "p":
-        multiplyer = -1
-    for k,v in date_group.items():
-        # for delta hedging (dh)
-        imp_vol = v.ImpliedVolatility.iloc[0]
-        
-        stock = -v.Delta.iloc[0]
-        if k == last_date: # redundant
-            break
-        spot_start = v[v.TradeDate==k].AdjSpot.values[0]
-        px_trade_start = v[v.TradeDate==k].px.values[0]
-        
-        if v.shape[0]==1 and (k== last_trade or hold==1):
-            data_st = v
-            
-            
-            # expiry spot only for expiry otherwise spot, remove expiry spot use spot from spot data and also overcome nans.
-            trade_date = dates[dates>data_st.TradeDate.values[0]][0]
-            if trade_date>=v.AdjExpiry.iloc[-1]:
-                closing_spot = v.ExpirySpot.iloc[-1]
-            else:
-                closing_spot = fetch_from_db(trade_date)
-
-            px_start = data_st.px.values[0]
-            
-            data_st['BotOn']=k
-
-            data_st['TradeDate'] =trade_date
-            data_st['Strike'] = data_st.AdjStrike.values[0]
-            data_st['SpotStart'] = spot_start
-            data_st['PxStart'] = px_trade_start
-            data_st['AdjSpot'] = spot_start 
-            data_st['OptPxBot'] = px_start
-            data_st['Delta'] = 0
-            px_end = max(multiplyer*(closing_spot-data_st.AdjStrike.values[-1]),0)
-            data_st['OptPxTrade'] = px_end
-            pnl = (px_end-px_start)/px_start
-            pnl = mt*pnl 
-            data_st['SpotPct'] = (data_gen.df[data_gen.df.TradeDate ==data_st.TradeDate.values[0]].AdjSpot.iloc[0]-data_st.AdjSpot.values[0])/data_st.AdjSpot.values[0]###
-            data_st['OptPnl'] = pnl
-            data_st = data_st.drop(columns =['AdjStrike','px'])
-            option_pnl = data_st
-            if dh!= 'off':
-                dhi,dhiv,dhmv = stock_pnl(data_st,v.ExpirySpot.iloc[-1],stock=stock,iv=imp_vol)
-                data_st['dhi'] =pnl+dhi/px_start
-                data_st['dhiv'] =pnl+dhiv/px_start
-                data_st['dhmv'] =pnl+dhmv/px_start
-            
-
-
-
-        else:
-            option_data = []
-            
-            for i in range(v.shape[0]-1):  
-                
-                    
-                
-                data = v.iloc[i:i+2]        
-                pnl_frame = compute_pnl(data,mt,k,spot_start,px_trade_start,multiplyer,dh=dh,iv=imp_vol,stock=stock)                  
-                option_data.append(pnl_frame)
-            option_pnl = pd.concat(option_data, ignore_index=True)
-       
-        if option_pnl.shape[0]< hold and option_pnl.TradeDate.iloc[-1]<v.AdjExpiry.iloc[-1] and option_pnl.TradeDate.iloc[-1]<=last_trade:
-
-                
-
-            data_st = option_pnl.iloc[[-1]]
-            
-            trade_date = dates[dates>data_st.TradeDate.values[0]][0]
-            if trade_date>=v.AdjExpiry.iloc[-1]:
-                closing_spot = v.ExpirySpot.iloc[-1]
-            else:
-                closing_spot = fetch_from_db(trade_date)
-            
-            trade_start = data_st.TradeDate.values[0]
-            px_start = data_st.OptPxTrade.values[0]
-            px_end = max(multiplyer*(closing_spot-data_st.Strike.values[-1]),0)
-            pnl = (px_end-px_start)/px_start
-            pnl = mt*pnl 
-            data_st['BotOn']=k
-            data_st['PxStart'] = px_trade_start
-            data_st['TradeDate'] = trade_date
-            
-            data_st['AdjSpot'] = data_gen.df[data_gen.df.TradeDate ==trade_start].AdjSpot.iloc[0]
-            data_st['Strike'] = data_st.Strike.values[0]
-            data_st['Delta'] = 0
-            data_st['SpotStart'] = spot_start
-            data_st['OptPxBot'] = px_start
-            data_st['OptPxTrade'] = px_end
-            if dh!= 'off':
-                dhi,dhiv,dhmv = stock_pnl(data_st,v.ExpirySpot.iloc[-1],stock=stock,iv=imp_vol)
-                data_st['dhi'] =pnl+dhi/px_start
-                data_st['dhiv'] =pnl+dhiv/px_start
-                data_st['dhmv'] =pnl+dhmv/px_start
-            # used sorting
-            try:
-                data_st['SpotPct'] = (data_gen.df[data_gen.df.TradeDate ==trade_date].AdjSpot.iloc[0]-data_st['AdjSpot'].values[0])/data_st['AdjSpot']
-            except Exception as e:
-                print(data_st)
-            data_st['OptPnl'] = pnl
-            option_pnl = pd.concat([option_pnl,data_st], ignore_index=True)
-            
-                
-
-        # ________
-        
-        
-        option_accumulator.append(option_pnl)
-    df_opt = pd.concat(option_accumulator, ignore_index=True)
-    if dh =='off':
-        cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
-                'ExpirySpot','OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
-                'SpotStart','OptPnl','TradeStart','PxStart']
-    else : 
-         cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
-                'ExpirySpot','OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
-                'SpotStart','OptPnl','dhi','dhiv','dhmv','TradeStart','PxStart']
-
-        
-    df_op = df_opt[cols]
-    df_op = df_op.rename(columns ={'AdjSpot':'Spot','AdjExpiry':'ExpiryDate','ExpirySpot':'Spot_at_Expiry'})
-    # df_active_contracts  = (df_op.groupby('TradeStart').size().reset_index(name='ActiveOptions'))
-    # df_op ['NumOfContracts'] = df_op.apply(lambda x: compute_contracts(x,df_active_contracts,capital),axis=1)
-    # df_op = df_op.drop(columns =['TradeStart'])
-   
-    return df_op
-
-def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFreeRates.csv',moneyness = 100,delta = None,bydelta=False, time_to_expiry = 1,callput = 'p',bot =1,hold = 1, buysell = 'buy',
                     interpolator ='bicubic',symbool='EV',start_date = None,end_date= None,dh='off'):
     
     
@@ -311,8 +125,8 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
     df_opt = data_dict['df_options']
 
     df_opt = df_opt[['TradeDate','AdjExpiry', 'AdjStrike',
-                     'AdjSpot', 'ExpirySpot','Moneyness','px', 'Delta',
-                     'CallPut', 'Symbol','Flag','TradeStart','ImpliedVolatility','days_to_expiry','risk_free_rate']]
+                     'AdjSpot','Moneyness','px', 'Delta',
+                     'CallPut', 'Symbol','Flag','TradeStart','ImpliedVolatility','days_to_expiry','risk_free_rate']] 
     
     dates = np.sort(data_gen.df.TradeDate.unique())
     if not end_date:
@@ -348,7 +162,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
             # expiry spot only for expiry otherwise spot, remove expiry spot use spot from spot data and also overcome nans.
             trade_date = dates[dates>data_st.TradeDate.values[0]][0]
             if trade_date>=v.AdjExpiry.iloc[-1]:
-                closing_spot = v.ExpirySpot.iloc[-1]
+                closing_spot = fetch_from_db(v.AdjExpiry.iloc[-1])
             else:
                 closing_spot = fetch_from_db(trade_date)
 
@@ -370,12 +184,13 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
             data['OptPnl'] = pnl
             data['SpotEnd'] = closing_spot
             data['iv_start'] = imp_vol
+            #data['Spot_at_Expiry'] =fetch_from_db(v.AdjExpiry.iloc[-1])
             # data_st = data_st.drop(columns =['AdjStrike','px'])
             option_pnl = data
     
         else:
            
-            option_pnl = compute_pnl_v1(v,mt,k,spot_start,px_trade_start,imp_vol)  
+            option_pnl = compute_pnl(v,mt,k,spot_start,px_trade_start,imp_vol)  
        
         if option_pnl.shape[0]< hold and option_pnl.TradeDate.iloc[-1]<v.AdjExpiry.iloc[-1] and option_pnl.TradeDate.iloc[-1]<=last_trade:
 
@@ -384,7 +199,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
             
             trade_date = dates[dates>data_st.TradeDate.values[0]][0]
             if trade_date>=v.AdjExpiry.iloc[-1]:
-                closing_spot = v.ExpirySpot.iloc[-1]
+                closing_spot = fetch_from_db(v.AdjExpiry.iloc[-1])
             else:
                 closing_spot = fetch_from_db(trade_date)
             
@@ -411,6 +226,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
                 print(data_st)
             data_st['OptPnl'] = pnl
             data_st['SpotEnd'] = closing_spot
+            # data_st['Spot_at_Expiry'] =fetch_from_db(v.AdjExpiry.iloc[-1])
             option_pnl = pd.concat([option_pnl,data_st], ignore_index=True)
             
         option_accumulator.append(option_pnl)
@@ -418,7 +234,7 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
     df_opt = pd.concat(option_accumulator, ignore_index=True)
     if dh!= 'off':
                 
-        df_opt['dhi'] =df_opt['OptPnl']+(stock*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
+        df_opt['dhi'] =df_opt['OptPnl']+mt*(stock*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
         
         df_opt['Delta_Start'] =  vectorized_delta(flag=df_opt['CallPut'],
                                                         S=df_opt['AdjSpot'],
@@ -427,22 +243,22 @@ def gen_options_pnl_v1(data_path = 'AAPL_master_data.csv',rates_path = 'RiskFree
                                                         r=df_opt['risk_free_rate'],
                                                         sigma=df_opt['iv_start'],
                                                         model='black_scholes')
-        df_opt['dhiv'] =df_opt['OptPnl']+(df_opt['Delta_Start']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
-        df_opt['dhmv'] =df_opt['OptPnl']+(df_opt['Delta']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])  
+        df_opt['dhiv'] =df_opt['OptPnl']+mt*(df_opt['Delta_Start']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])
+        df_opt['dhmv'] =df_opt['OptPnl']+mt*(df_opt['Delta']*(df_opt['SpotEnd']-df_opt['AdjSpot'])/df_opt['OptPxBot'])  
                 
     
     if dh =='off':
         cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
-                'ExpirySpot','OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
+                'OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
                 'SpotStart','OptPnl','TradeStart','PxStart']
     else : 
          cols = ['Flag','BotOn', 'TradeDate', 'AdjExpiry', 'Strike', 'AdjSpot',
-                'ExpirySpot','OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
-                'SpotStart','OptPnl','dhi','dhiv','dhmv','TradeStart','PxStart','Delta_Start','iv_start','CallPut','AdjStrike','days_to_expiry','risk_free_rate']
+                 'OptPxBot', 'OptPxTrade', 'SpotPct','Delta',
+                 'SpotStart','OptPnl','dhi','dhiv','dhmv','TradeStart','PxStart','Delta_Start','iv_start','CallPut','AdjStrike','days_to_expiry','risk_free_rate']
 
         
     df_op = df_opt[cols]
-    df_op = df_op.rename(columns ={'AdjSpot':'Spot','AdjExpiry':'ExpiryDate','ExpirySpot':'Spot_at_Expiry'})
+    df_op = df_op.rename(columns ={'AdjSpot':'Spot','AdjExpiry':'ExpiryDate'})
     
     return df_op
     

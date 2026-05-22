@@ -11,6 +11,7 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 import warnings
+from .connector import *
 
 def compute_risk_free_rate(x,days_to_exp):
     
@@ -51,7 +52,7 @@ def compute_risk_free_rate(x,days_to_exp):
 
 def compute_iv(x):
     try:
-        implied_vol = iv.implied_volatility(x.px,x.AdjSpot,x.AdjStrike,x.days_to_expiry/365,x.risk_free_rate,x.CallPut)
+        implied_vol = np.asarray(iv.implied_volatility(x.px,x.AdjSpot,x.AdjStrike,x.days_to_expiry/365,x.risk_free_rate,x.CallPut)).item()
     except Exception as e:
         # check exception 
         implied_vol = 0
@@ -162,9 +163,14 @@ def date_int_convertor(date):
 
     return int(fmt_date)
 
-def load_data(path = './Data/AAPL_master_data.csv'):
-    df = pd.read_csv(path)
-    df = df.drop_duplicates()
+def load_data(callput = 'c'):
+    conn, cursor = get_db()
+    query = "SELECT * FROM OPTIONS_DATA WHERE CallPut = %s"
+    df = pd.read_sql(query, conn, params=[callput])
+
+    cursor.close()
+    df.shape
+    
     print(f'no of cols ={len(df.columns)}')   
    
     return df
@@ -459,7 +465,7 @@ class GenSurface():
         mask = (self.known_x == self.exp_dict[exp])
         ax.scatter(self.known_y[mask],self.known_values[mask],label='Market')
         ax.scatter(self.known_y[mask],iv_fitted[mask],label='Spline')
-        ax.set_title(f'Comparison of IV const exp: Market vs Spline\n Trade Date:{self.data.TradeDate.iloc[0]},expiry date:{exp}')
+        ax.set_title(f'IV for const exp: Market vs Spline\n Trade Date:{self.data.TradeDate.iloc[0]},expiry date:{exp}')
         ax.legend()
         
     def scatter_plot_iv_stk(self,ax,stk):
@@ -473,8 +479,8 @@ class GenSurface():
         mask = [ind for ind,fwd_mn in enumerate(self.known_y) if fwd_mn in y]
         ax.scatter(self.known_x[mask],self.known_values[mask],label='Market')
         ax.scatter(x,iv_fitted,label='Spline')
-        
-        ax.set_title(f'IV stk constant\n Market vs SplineTrade Date:{self.data.TradeDate.iloc[0]},stk:{stk}')
+        stk=round(stk,2)
+        ax.set_title(f'IV for const STK\n Market vs SplineTrade Date:{self.data.TradeDate.iloc[0]},stk:{stk}')
         ax.legend()
         
 
@@ -522,8 +528,8 @@ class GenSurface():
         ax.scatter(data.AdjStrike,data.px.values, label = 'Market')
         trade_date = data.TradeDate.iloc[0]
         exp_date = data.AdjExpiry.iloc[0]
-        spot = data.AdjSpot.iloc[0]
-        ax.set_title(f'Comparison of premium Market vs Computed for:\n Trade Date:{trade_date},expdate:{exp_date}, adjusted spot:{spot}')
+        spot = round(data.AdjSpot.iloc[0],2)
+        ax.set_title(f'PREMIUM: Market vs Computed for:\n Trade Date:{trade_date},Exp:{exp_date}, AdjSpot:{spot}')
         ax.set_xlabel('Strike')
         ax.set_ylabel('Premium')
         ax.legend()
@@ -537,9 +543,9 @@ class GenSurface():
         ax.plot(data.days_to_expiry,data.px_cmpt.values)
         ax.plot(data.days_to_expiry,data.px.values)
         trade_date = data.TradeDate.iloc[0]
-        adj_stk = data.AdjStrike.iloc[0]
-        spot = data.AdjSpot.iloc[0]
-        ax.set_title(f'Comparison of premium Market vs Computed for:\n Trade Date:{trade_date},adjstk:{adj_stk}, adjusted spot:{spot}')
+        adj_stk = round(data.AdjStrike.iloc[0],2)
+        spot = round(data.AdjSpot.iloc[0],2)
+        ax.set_title(f'Premium Market vs Computed for:\n Trade Date:{trade_date},AdjStk:{adj_stk}, AdjSpot:{spot}')
         ax.set_xlabel('Expiry')
         ax.set_ylabel('Premium')
         ax.legend()
@@ -586,5 +592,5 @@ class GenSurface():
                 data = self.scatter_plot_px_stk(ax,key)
                 ind+=1
 
-    
+        fig.tight_layout()
 

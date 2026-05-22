@@ -7,7 +7,7 @@ import os
 
 load_dotenv()
 pwd = os.getenv("DB_PASSWORD")
-allowed_tables = {"OPTIONS_DATA", "RISK_FREE_RATES", "AAPL_SPOT","OPTION_KEY","CONNECTION"}
+allowed_tables = {"OPTIONS_DATA", "RISK_FREE_RATES", "AAPL_SPOT","OPTION_KEY","CONNECTION",'RAW_DATA'}
 
 def get_db():
     conn = mysql.connector.connect(
@@ -38,7 +38,7 @@ def get_cols_info(df):
         col_dict[col] = {'col_type':dt,'length':length}
     return col_dict
 
-def create_table_query(col_dict,name):
+def create_table_query(col_dict,name,unique_key = None):
     query = f'CREATE TABLE {name} ('
     populate_query = f'INSERT IGNORE INTO {name} VALUES('
     for k,v in col_dict.items():
@@ -60,15 +60,20 @@ def create_table_query(col_dict,name):
             typ = f'INT'
 
             query+=f'{k} {typ}, '
-    if name == "OPTIONS_DATA":
-        pk = 'PRIMARY KEY (TradeDate, AdjExpiry,AdjStrike,CallPut));'
-    else: 
-        pk = 'PRIMARY KEY (TradeDate));'
-    
-    query += pk
+    # if name == "OPTIONS_DATA":
+    #     pk = 'PRIMARY KEY (TradeDate, AdjExpiry,AdjStrike,CallPut));'
+    # else: 
+    #     pk = 'PRIMARY KEY (TradeDate));'
+    if unique_key:
+        pk = 'PRIMARY KEY ('
+        for item in unique_key:
+            pk+=item+','
+        pk = pk.strip(',')
+        pk+='));'
+        query += pk
     populate_query = populate_query.strip(',')
     populate_query+= ')'
-
+    
     return query,populate_query
 
 
@@ -76,9 +81,9 @@ def create_table_query(col_dict,name):
         
 
 
-def create_tabels(df,name):
+def create_tabels(df,name,key):
     col_dict = get_cols_info(df)
-    query,_ = create_table_query(col_dict,name)
+    query,_ = create_table_query(col_dict,name,unique_key=key)
 
     conn, cursor = get_db()
     # cursor.execute("SELECT DATABASE();")
@@ -190,7 +195,12 @@ def extract_start_data(key):
 
     return df
 
+def get_available_keys():
+    conn, cursor = get_db()
+    df = pd.read_sql(f"""SELECT DISTINCT OptionKey FROM OPTION_KEY ;""",conn)
 
+    cursor.close()
+    return df  
 def load_full_data(callput,symbool):
     conn, cursor = get_db()
 

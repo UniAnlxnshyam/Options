@@ -45,7 +45,7 @@ class Item(BaseModel):
     percent      : int
     start_date   : int | None
     end_date     : int | None
-    pnl          : Literal[0, 1]
+ 
 def get_pnl_wealth(data):
     if data['mn_dt'].value=='delta':
         delta = data['strike']
@@ -55,9 +55,9 @@ def get_pnl_wealth(data):
         delta = None
         mn = data['strike']
         bydelta = False
-    opt_pnl = gen_options_pnl_v1(delta = delta,bydelta=bydelta,moneyness=mn,time_to_expiry=data['maturity'],callput=data['option'].value,
+    opt_pnl = gen_options_pnl(delta = delta,bydelta=bydelta,moneyness=mn,time_to_expiry=data['maturity'],callput=data['option'].value,
                               bot=data['open'],hold=data['close'],symbool=data['symbol'].value,dh = data['dh'].value,start_date=data['start_date'],
-                              end_date=data['end_date'])
+                              end_date=data['end_date'],buysell=data['buysell'])
     opt_pnl,wealth = wealth_computation(opt_pnl,sizing = data['sizing'].value,hold = data['close'],dh = data['dh'].value,pct = data['percent'],
                                         value = data['value'])
 
@@ -71,10 +71,9 @@ async def get_data(item: Item):
     data = item.model_dump()
     pnl,wealth = await run_in_threadpool(get_pnl_wealth, data)
 
-    if data['pnl']==1:
-        out =  {'pnl':pnl,'wealth':wealth}
-    else:
-        out = {'wealth':wealth}
+    
+    out =  {'pnl':pnl,'wealth':wealth}
+    
 
     return out
 

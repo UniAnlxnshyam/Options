@@ -52,8 +52,10 @@ def compute_continous_rate(df):
         df[f'risk_free_rate_{period}'] = 365*np.log(1+(7*period*df[col])/(100*365))/(7*period)
 def compute_iv(x):
     try:
-        implied_vol = iv.implied_volatility(x.px,x.AdjSpot,x.AdjStrike,x.days_to_expiry/365,x.risk_free_rate,x.CallPut)
+        implied_vol = np.asarray(iv.implied_volatility(x.px,x.AdjSpot,x.AdjStrike,x.days_to_expiry/365,x.risk_free_rate,x.CallPut)).item()
+        # print(1,implied_vol.item())
     except Exception as e:
+        
         # check exception 
         implied_vol = 0
     implied_vol = min(20,implied_vol)
@@ -197,11 +199,11 @@ def merge_data(path_options,path_stock):
     df['Month_To_Expiry'] = (df.AdjExpiry.dt.year - df.FmtTradeDate.dt.year) * 12 + (df.AdjExpiry.dt.month - df.FmtTradeDate.dt.month)
     df_spot["FmtTradeDate"] = pd.to_datetime(df_spot["TradeDate"], format="%Y%m%d")
     # merge spot at expiry with main 
-    df = df.merge(df_spot, how='left', left_on='AdjExpiry', right_on='FmtTradeDate',
-                  suffixes=('', '_expiry')).drop(columns=['FmtTradeDate_expiry','TradeDate_expiry',
-                                                          'Spot_expiry']).rename(columns={'AdjSpot_expiry': 'ExpirySpot'})
-    # spot at expiry for options expiring after last date in date is set to spot at last date redundant
-    df['ExpirySpot'] = df['ExpirySpot'].fillna(df.iloc[-1]['Spot'])
+    # df = df.merge(df_spot, how='left', left_on='AdjExpiry', right_on='FmtTradeDate',
+    #               suffixes=('', '_expiry')).drop(columns=['FmtTradeDate_expiry','TradeDate_expiry',
+    #                                                       'Spot_expiry']).rename(columns={'AdjSpot_expiry': 'ExpirySpot'})
+    # # spot at expiry for options expiring after last date in date is set to spot at last date redundant
+    # df['ExpirySpot'] = df['ExpirySpot'].fillna(df.iloc[-1]['Spot'])
     df_r = load_risk_free_rates()
     df = df.merge(df_r, how='left', left_on='TradeDate', right_on='date')
     df = df.drop(columns='date')
@@ -218,8 +220,11 @@ def merge_data(path_options,path_stock):
     df_spot =df_spot.drop(columns=['FmtTradeDate'])
     # df['D1'] = df.Delta
     df['Moneyness'] = round(100*(df.AdjStrike/df.AdjSpot),2)
+   
     df['ImpliedVolatility']=df.apply(lambda x:compute_iv(x),axis=1)
+    
     df['params'] = df.apply(lambda x: compute_greeks(x.CallPut,x.AdjSpot,x.days_to_expiry,x.risk_free_rate,x.AdjStrike,x.ImpliedVolatility),axis=1)
+    
     for i,item in enumerate(['Delta', 'Gamma','Vega', 'Theta', 'Rho']):
         df[item] = df.params.apply(lambda x:round(x[i],10))
 
@@ -228,15 +233,19 @@ def merge_data(path_options,path_stock):
     df['Flag'] = 0
     df = convert_int32(df)
     df.to_csv(os.path.join(os.getcwd(),'Data','AAPL_master_data.csv'),index=False)
-    create_tabels(df,'OPTIONS_DATA')
+    df_raw = df[['Ticker','TradeDate','Strike','ExpiryDate','OpenInterest','Spot','CallPut']]
+    create_tabels(df_raw,'RAW_DATA',('TradeDate','Strike','ExpiryDate','CallPut'))
+    populate_table(df_raw,'RAW_DATA')
+    df = df.drop(columns=['Strike','ExpiryDate','OpenInterest','Spot'])
+    create_tabels(df,'OPTIONS_DATA',('TradeDate', 'AdjExpiry','AdjStrike','CallPut'))
     populate_table(df,'OPTIONS_DATA')
     rfr_df = convert_int32(rfr_df)
     rfr_df.to_csv(os.path.join(os.getcwd(),'Data','RiskFreeRates.csv'),index=False)
-    create_tabels(rfr_df,'RISK_FREE_RATES')
+    create_tabels(rfr_df,'RISK_FREE_RATES',('TradeDate',))
     populate_table(rfr_df,'RISK_FREE_RATES')
     df_spot = convert_int32(df_spot)
     df_spot.to_csv(os.path.join(os.getcwd(),'Data','AAPL_spot.csv'),index=False)
-    create_tabels(df_spot,'AAPL_SPOT')
+    create_tabels(df_spot,'AAPL_SPOT',('TradeDate',))
     populate_table(df_spot,'AAPL_SPOT')
     create_secondary_tabels()
 
